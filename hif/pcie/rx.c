@@ -321,6 +321,7 @@ void pcie_rx_recv(unsigned long data)
 	struct sk_buff *prx_skb = NULL;
 	int pkt_len;
 	struct ieee80211_rx_status *status;
+	struct sk_buff *monitor_skb;
 	struct ieee80211_hdr *wh;
 
 	desc = &pcie_priv->desc_data[0];
@@ -407,6 +408,16 @@ void pcie_rx_recv(unsigned long data)
 		if (ieee80211_is_probe_req(wh->frame_control) &&
 		    priv->dump_probe)
 			wiphy_info(hw->wiphy, "Probe Req: %pM\n", wh->addr2);
+
+		monitor_skb = skb_copy(prx_skb, GFP_ATOMIC);
+		if (monitor_skb) {
+			IEEE80211_SKB_RXCB(monitor_skb)->flag |= RX_FLAG_ONLY_MONITOR;
+			if(status->flag & RX_FLAG_DECRYPTED)
+				((struct ieee80211_hdr *)monitor_skb->data)->frame_control &= ~__cpu_to_le16(IEEE80211_FCTL_PROTECTED);
+
+			ieee80211_rx(hw, monitor_skb);
+			status->flag |= RX_FLAG_SKIP_MONITOR;
+		}
 
 		ieee80211_rx(hw, prx_skb);
 out:
