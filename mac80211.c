@@ -347,7 +347,7 @@ out:
 static void mwl_mac80211_bss_info_changed_sta(struct ieee80211_hw *hw,
 					      struct ieee80211_vif *vif,
 					      struct ieee80211_bss_conf *info,
-					      u32 changed)
+					      u64 changed)
 {
 	struct mwl_priv *priv = hw->priv;
 
@@ -369,15 +369,15 @@ static void mwl_mac80211_bss_info_changed_sta(struct ieee80211_hw *hw,
 		}
 	}
 
-	if ((changed & BSS_CHANGED_ASSOC) && vif->bss_conf.assoc)
+	if ((changed & BSS_CHANGED_ASSOC) && vif->cfg.assoc)
 		mwl_fwcmd_set_aid(hw, vif, (u8 *)vif->bss_conf.bssid,
-				  vif->bss_conf.aid);
+				  vif->cfg.aid);
 }
 
 static void mwl_mac80211_bss_info_changed_ap(struct ieee80211_hw *hw,
 					     struct ieee80211_vif *vif,
 					     struct ieee80211_bss_conf *info,
-					     u32 changed)
+					     u64 changed)
 {
 	struct mwl_priv *priv = hw->priv;
 	struct mwl_vif *mwl_vif;
@@ -427,8 +427,8 @@ static void mwl_mac80211_bss_info_changed_ap(struct ieee80211_hw *hw,
 	if (changed & (BSS_CHANGED_BEACON_INT | BSS_CHANGED_BEACON)) {
 		struct sk_buff *skb;
 
-		if ((info->ssid[0] != '\0') &&
-		    (info->ssid_len != 0) &&
+		if ((vif->cfg.ssid[0] != '\0') &&
+		    (vif->cfg.ssid_len != 0) &&
 		    (!info->hidden_ssid)) {
 			if (mwl_vif->broadcast_ssid != true) {
 				mwl_fwcmd_broadcast_ssid_enable(hw, vif, true);
@@ -442,7 +442,7 @@ static void mwl_mac80211_bss_info_changed_ap(struct ieee80211_hw *hw,
 		}
 
 		if (!mwl_vif->set_beacon) {
-			skb = ieee80211_beacon_get(hw, vif);
+			skb = ieee80211_beacon_get(hw, vif, 0);
 
 			if (skb) {
 				mwl_fwcmd_set_beacon(hw, vif, skb->data, skb->len);
@@ -459,7 +459,7 @@ static void mwl_mac80211_bss_info_changed_ap(struct ieee80211_hw *hw,
 static void mwl_mac80211_bss_info_changed(struct ieee80211_hw *hw,
 					  struct ieee80211_vif *vif,
 					  struct ieee80211_bss_conf *info,
-					  u32 changed)
+					  u64 changed)
 {
 	switch (vif->type) {
 	case NL80211_IFTYPE_AP:
@@ -583,10 +583,10 @@ static int mwl_mac80211_sta_add(struct ieee80211_hw *hw,
 	if (vif->type == NL80211_IFTYPE_MESH_POINT)
 		sta_info->is_mesh_node = true;
 
-	if (sta->ht_cap.ht_supported) {
+	if (sta->link[sta->valid_links]->ht_cap.ht_supported) {
 		sta_info->is_ampdu_allowed = true;
 		sta_info->is_amsdu_allowed = false;
-		if (sta->ht_cap.cap & IEEE80211_HT_CAP_MAX_AMSDU)
+		if (sta->link[sta->valid_links]->ht_cap.cap & IEEE80211_HT_CAP_MAX_AMSDU)
 			sta_info->amsdu_ctrl.cap = MWL_AMSDU_SIZE_8K;
 		else
 			sta_info->amsdu_ctrl.cap = MWL_AMSDU_SIZE_4K;
@@ -665,17 +665,17 @@ static int mwl_mac80211_sta_remove(struct ieee80211_hw *hw,
 }
 
 static int mwl_mac80211_conf_tx(struct ieee80211_hw *hw,
-				struct ieee80211_vif *vif,
-				u16 queue,
-				const struct ieee80211_tx_queue_params *params)
+				 struct ieee80211_vif *vif,
+				 unsigned int link_id, u16 ac,
+				 const struct ieee80211_tx_queue_params *params)
 {
 	struct mwl_priv *priv = hw->priv;
 	int rc = 0;
 
-	if (WARN_ON(queue > SYSADPT_TX_WMM_QUEUES - 1))
+	if (WARN_ON(ac > SYSADPT_TX_WMM_QUEUES - 1))
 		return -EINVAL;
 
-	memcpy(&priv->wmm_params[queue], params, sizeof(*params));
+	memcpy(&priv->wmm_params[ac], params, sizeof(*params));
 
 	if (!priv->wmm_enabled) {
 		rc = mwl_fwcmd_set_wmm_mode(hw, true);
@@ -683,10 +683,10 @@ static int mwl_mac80211_conf_tx(struct ieee80211_hw *hw,
 	}
 
 	if (!rc) {
-		rc = mwl_fwcmd_set_edca_params(hw, queue,
+		rc = mwl_fwcmd_set_edca_params(hw, ac,
 					       params->cw_min, params->cw_max,
 					       params->aifs, params->txop);
-		vif->hw_queue[queue] = queue % (IEEE80211_NUM_ACS - 1);
+		vif->hw_queue[ac] = ac % (IEEE80211_NUM_ACS - 1);
 		if (vif->type == NL80211_IFTYPE_AP ||
 		    vif->type == NL80211_IFTYPE_MESH_POINT)
 			vif->cab_queue = (IEEE80211_NUM_ACS - 1);

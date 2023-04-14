@@ -173,9 +173,9 @@ u32 utils_get_init_tx_rate(struct mwl_priv *priv, struct ieee80211_conf *conf,
 	u32 tx_rate;
 	u16 format, nss, bw, rate_mcs;
 
-	if (sta->vht_cap.vht_supported)
+	if (sta->link[sta->valid_links]->vht_cap.vht_supported)
 		format = TX_RATE_FORMAT_11AC;
-	else if (sta->ht_cap.ht_supported)
+	else if (sta->link[sta->valid_links]->ht_cap.ht_supported)
 		format = TX_RATE_FORMAT_11N;
 	else
 		format = TX_RATE_FORMAT_LEGACY;
@@ -192,11 +192,11 @@ u32 utils_get_init_tx_rate(struct mwl_priv *priv, struct ieee80211_conf *conf,
 		nss = 3;
 		break;
 	default:
-		nss = sta->rx_nss;
+		nss = sta->link[sta->valid_links]->rx_nss;
 		break;
 	}
-	if (nss > sta->rx_nss)
-		nss = sta->rx_nss;
+	if (nss > sta->link[sta->valid_links]->rx_nss)
+		nss = sta->link[sta->valid_links]->rx_nss;
 
 	switch (conf->chandef.width) {
 	case NL80211_CHAN_WIDTH_20_NOHT:
@@ -213,11 +213,11 @@ u32 utils_get_init_tx_rate(struct mwl_priv *priv, struct ieee80211_conf *conf,
 		bw = TX_RATE_BANDWIDTH_160;
 		break;
 	default:
-		bw = sta->bandwidth;
+		bw = sta->link[sta->valid_links]->bandwidth;
 		break;
 	}
-	if (bw > sta->bandwidth)
-		bw = sta->bandwidth;
+	if (bw > sta->link[sta->valid_links]->bandwidth)
+		bw = sta->link[sta->valid_links]->bandwidth;
 
 	switch (format) {
 	case TX_RATE_FORMAT_LEGACY:

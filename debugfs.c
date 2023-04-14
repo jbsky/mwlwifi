@@ -498,9 +498,9 @@ static ssize_t mwl_debugfs_vif_read(struct file *file, char __user *ubuf,
 		switch (vif->type) {
 		case NL80211_IFTYPE_AP:
 			len += scnprintf(p + len, size - len, "type: ap\n");
-			memcpy(ssid, vif->bss_conf.ssid,
-			       vif->bss_conf.ssid_len);
-			ssid[vif->bss_conf.ssid_len] = 0;
+			memcpy(ssid, vif->cfg.ssid,
+			       vif->cfg.ssid_len);
+			ssid[vif->cfg.ssid_len] = 0;
 			len += scnprintf(p + len, size - len,
 					 "ssid: %s\n", ssid);
 			len += scnprintf(p + len, size - len,
@@ -522,8 +522,8 @@ static ssize_t mwl_debugfs_vif_read(struct file *file, char __user *ubuf,
 					 "type: unknown\n");
 			break;
 		}
-		if (vif->chanctx_conf) {
-			chan_def = &vif->chanctx_conf->def;
+		if (vif->bss_conf.chanctx_conf) {
+			chan_def = &vif->bss_conf.chanctx_conf->def;
 			len += scnprintf(p + len, size - len,
 					 "channel: %d: width: %d\n",
 					 chan_def->chan->hw_value,
@@ -602,28 +602,28 @@ static ssize_t mwl_debugfs_sta_read(struct file *file, char __user *ubuf,
 					 "amsdu cap: 0x%02x\n",
 					 sta_info->amsdu_ctrl.cap);
 		}
-		if (sta->ht_cap.ht_supported) {
+		if (sta->link[sta->valid_links]->ht_cap.ht_supported) {
 			len += scnprintf(p + len, size - len,
 					 "ht_cap: 0x%04x, ampdu: %02x, %02x\n",
-					 sta->ht_cap.cap,
-					 sta->ht_cap.ampdu_factor,
-					 sta->ht_cap.ampdu_density);
+					 sta->link[sta->valid_links]->ht_cap.cap,
+					 sta->link[sta->valid_links]->ht_cap.ampdu_factor,
+					 sta->link[sta->valid_links]->ht_cap.ampdu_density);
 			len += scnprintf(p + len, size - len,
 					 "rx_mask: 0x%02x, %02x, %02x, %02x\n",
-					 sta->ht_cap.mcs.rx_mask[0],
-					 sta->ht_cap.mcs.rx_mask[1],
-					 sta->ht_cap.mcs.rx_mask[2],
-					 sta->ht_cap.mcs.rx_mask[3]);
+					 sta->link[sta->valid_links]->ht_cap.mcs.rx_mask[0],
+					 sta->link[sta->valid_links]->ht_cap.mcs.rx_mask[1],
+					 sta->link[sta->valid_links]->ht_cap.mcs.rx_mask[2],
+					 sta->link[sta->valid_links]->ht_cap.mcs.rx_mask[3]);
 		}
-		if (sta->vht_cap.vht_supported) {
+		if (sta->link[sta->valid_links]->vht_cap.vht_supported) {
 			len += scnprintf(p + len, size - len,
 					 "vht_cap: 0x%08x, mcs: %02x, %02x\n",
-					 sta->vht_cap.cap,
-					 sta->vht_cap.vht_mcs.rx_mcs_map,
-					 sta->vht_cap.vht_mcs.tx_mcs_map);
+					 sta->link[sta->valid_links]->vht_cap.cap,
+					 sta->link[sta->valid_links]->vht_cap.vht_mcs.rx_mcs_map,
+					 sta->link[sta->valid_links]->vht_cap.vht_mcs.tx_mcs_map);
 		}
 		len += scnprintf(p + len, size - len, "rx_bw: %d, rx_nss: %d\n",
-				 sta->bandwidth, sta->rx_nss);
+				 sta->link[sta->valid_links]->bandwidth, sta->link[sta->valid_links]->rx_nss);
 		len += scnprintf(p + len, size - len,
 				 "tdls: %d, tdls_init: %d\n",
 				 sta->tdls, sta->tdls_initiator);
