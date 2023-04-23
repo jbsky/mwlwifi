@@ -65,6 +65,8 @@
 #define TX_RATE_INFO_STD_GI           0
 #define TX_RATE_INFO_SHORT_GI         1
 
+#define TX_RATE_INFO_PREAMBLE         1
+
 /* tx rate information */
 /* 0: legacy format 1: 11n format 2: 11ac format */
 #define MWL_TX_RATE_FORMAT_MASK       0x00000003

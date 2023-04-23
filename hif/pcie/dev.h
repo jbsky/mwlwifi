@@ -826,7 +826,7 @@ static inline void pcie_tx_encapsulate_frame(struct mwl_priv *priv,
 static inline void pcie_tx_prepare_info(struct mwl_priv *priv, u32 rate,
 					struct ieee80211_tx_info *info)
 {
-	u32 format, bandwidth, short_gi, rate_id;
+	u32 format, bandwidth, short_gi, rate_id, preample, powerid, advcoding, bf;
 
 	ieee80211_tx_info_clear_status(info);
 
@@ -838,14 +838,14 @@ static inline void pcie_tx_prepare_info(struct mwl_priv *priv, u32 rate,
 
 	if (rate) {
 		/* Prepare rate information */
-		format = rate & MWL_TX_RATE_FORMAT_MASK;
-		bandwidth =
-			(rate & MWL_TX_RATE_BANDWIDTH_MASK) >>
-			MWL_TX_RATE_BANDWIDTH_SHIFT;
-		short_gi = (rate & MWL_TX_RATE_SHORTGI_MASK) >>
-			MWL_TX_RATE_SHORTGI_SHIFT;
-		rate_id = (rate & MWL_TX_RATE_RATEIDMCS_MASK) >>
-			MWL_TX_RATE_RATEIDMCS_SHIFT;
+		format    =  rate & MWL_TX_RATE_FORMAT_MASK;
+		bandwidth = (rate & MWL_TX_RATE_BANDWIDTH_MASK) >> MWL_TX_RATE_BANDWIDTH_SHIFT;
+		short_gi  = (rate & MWL_TX_RATE_SHORTGI_MASK)   >> MWL_TX_RATE_SHORTGI_SHIFT;
+		rate_id   = (rate & MWL_TX_RATE_RATEIDMCS_MASK) >> MWL_TX_RATE_RATEIDMCS_SHIFT;
+		preample  = (rate & MWL_TX_RATE_PREAMBLE_MASK)  >> MWL_TX_RATE_PREAMBLE_SHIFT;
+		powerid   = (rate & MWL_TX_RATE_POWERID_MASK)   >> MWL_TX_RATE_POWERID_SHIFT;
+		advcoding = (rate & MWL_TX_RATE_ADVCODING_MASK) >> MWL_TX_RATE_ADVCODING_SHIFT;
+		bf        = (rate & MWL_TX_RATE_BF_MASK)        >> MWL_TX_RATE_BF_SHIFT;
 
 		info->status.rates[0].idx = rate_id;
 		if (format == TX_RATE_FORMAT_LEGACY) {
@@ -872,6 +872,9 @@ static inline void pcie_tx_prepare_info(struct mwl_priv *priv, u32 rate,
 		if (short_gi == TX_RATE_INFO_SHORT_GI)
 			info->status.rates[0].flags |=
 				IEEE80211_TX_RC_SHORT_GI;
+		if (preample == TX_RATE_INFO_PREAMBLE)
+			info->status.rates[0].flags |=
+				IEEE80211_TX_RC_USE_SHORT_PREAMBLE;
 		info->status.rates[0].count = 1;
 		info->status.rates[1].idx = -1;
 	}
