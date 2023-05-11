@@ -952,7 +952,6 @@ void pcie_tx_xmit(struct ieee80211_hw *hw,
 		pkt_type = be16_to_cpu(*((__be16 *)
 			&skb->data[ieee80211_hdrlen(wh->frame_control) + 6]));
 		if (pkt_type == ETH_P_PAE) {
-			index = IEEE80211_AC_VO;
 			eapol_frame = true;
 		}
 		if (sta) {
