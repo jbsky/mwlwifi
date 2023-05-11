@@ -388,7 +388,6 @@ void pcie_rx_recv(unsigned long data)
 	struct pcie_priv *pcie_priv = priv->hif.priv;
 	struct pcie_desc_data *desc;
 	struct pcie_rx_hndl *curr_hndl;
-	int work_done = 0;
 	struct sk_buff *prx_skb = NULL;
 	int pkt_len;
 	struct ieee80211_rx_status *status;
@@ -407,8 +406,7 @@ void pcie_rx_recv(unsigned long data)
 		return;
 	}
 
-	while ((curr_hndl->pdesc->rx_control == EAGLE_RXD_CTRL_DMA_OWN) &&
-	       (work_done < pcie_priv->recv_limit)) {
+	while (curr_hndl->pdesc->rx_control == EAGLE_RXD_CTRL_DMA_OWN) {
 		prx_skb = curr_hndl->psk_buff;
 		if (!prx_skb)
 			goto out;
@@ -503,7 +501,6 @@ out:
 		curr_hndl->pdesc->rx_control = EAGLE_RXD_CTRL_DRIVER_OWN;
 		curr_hndl->pdesc->qos_ctrl = 0;
 		curr_hndl = curr_hndl->pnext;
-		work_done++;
 	}
 
 	desc->pnext_rx_hndl = curr_hndl;
