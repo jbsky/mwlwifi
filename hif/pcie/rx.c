@@ -409,14 +409,17 @@ void pcie_rx_recv(unsigned long data)
 		    priv->dump_probe)
 			wiphy_info(hw->wiphy, "Probe Req: %pM\n", wh->addr2);
 
-		monitor_skb = skb_copy(prx_skb, GFP_ATOMIC);
-		if (monitor_skb) {
-			IEEE80211_SKB_RXCB(monitor_skb)->flag |= RX_FLAG_ONLY_MONITOR;
-			if(status->flag & RX_FLAG_DECRYPTED)
-				((struct ieee80211_hdr *)monitor_skb->data)->frame_control &= ~__cpu_to_le16(IEEE80211_FCTL_PROTECTED);
+		if(priv->decrypt_rx &&
+		   status->flag & RX_FLAG_DECRYPTED) {
+			monitor_skb = skb_copy(prx_skb, GFP_ATOMIC);
+			if (monitor_skb) {
+				IEEE80211_SKB_RXCB(monitor_skb)->flag |= RX_FLAG_ONLY_MONITOR;
+				if(status->flag & RX_FLAG_DECRYPTED)
+					((struct ieee80211_hdr *)monitor_skb->data)->frame_control &= ~__cpu_to_le16(IEEE80211_FCTL_PROTECTED);
 
-			ieee80211_rx(hw, monitor_skb);
-			status->flag |= RX_FLAG_SKIP_MONITOR;
+				ieee80211_rx(hw, monitor_skb);
+				status->flag |= RX_FLAG_SKIP_MONITOR;
+			}
 		}
 
 		ieee80211_rx(hw, prx_skb);
