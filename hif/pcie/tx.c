@@ -975,7 +975,10 @@ void pcie_tx_xmit(struct ieee80211_hw *hw,
 			qos |= IEEE80211_QOS_CTL_ACK_POLICY_NORMAL;
 		}
 
-		if (is_multicast_ether_addr(wh->addr1) || eapol_frame)
+		if (is_multicast_ether_addr(wh->addr1) ||
+		    eapol_frame ||
+		    tx_info->flags & IEEE80211_TX_CTL_USE_MINRATE ||
+		    ieee80211_is_any_nullfunc(wh->frame_control))
 			xmitcontrol |= EAGLE_TXD_XMITCTRL_USE_MC_RATE;
 	}
 
