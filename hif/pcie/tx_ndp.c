@@ -371,11 +371,11 @@ void pcie_tx_skbs_ndp(unsigned long data)
 	struct ieee80211_hw *hw = (struct ieee80211_hw *)data;
 	struct mwl_priv *priv = hw->priv;
 	struct pcie_priv *pcie_priv = priv->hif.priv;
-	int num = SYSADPT_TX_WMM_QUEUES;
+	int num;
 	struct sk_buff *tx_skb;
 	int rc;
 
-	while (num--) {
+	for (num = 0; num < IEEE80211_NUM_ACS; num++) {
 		while (skb_queue_len(&pcie_priv->txq[num]) > 0) {
 			if (pcie_priv->desc_data_ndp.tx_desc_busy_cnt >=
 			    (MAX_TX_RING_SEND_SIZE - 1)) {
@@ -398,15 +398,6 @@ void pcie_tx_skbs_ndp(unsigned long data)
 				pcie_tx_done_ndp(hw);
 				pcie_priv->tx_done_cnt = 0;
 			}
-		}
-
-		if (skb_queue_len(&pcie_priv->txq[num]) <
-		    pcie_priv->txq_wake_threshold) {
-			int queue;
-
-			queue = SYSADPT_TX_WMM_QUEUES - num - 1;
-			if (ieee80211_queue_stopped(hw, queue))
-				ieee80211_wake_queue(hw, queue);
 		}
 	}
 
@@ -666,8 +657,6 @@ void pcie_tx_xmit_ndp(struct ieee80211_hw *hw,
 		}
 	}
 
-	index = SYSADPT_TX_WMM_QUEUES - index - 1;
-
 	tx_ctrl = (struct pcie_tx_ctrl_ndp *)tx_info->status.status_driver_data;
 	tx_ctrl->tx_que_priority = tx_que_priority;
 	tx_ctrl->hdrlen = ieee80211_hdrlen(wh->frame_control);
@@ -681,9 +670,6 @@ void pcie_tx_xmit_ndp(struct ieee80211_hw *hw,
 	    ieee80211_is_qos_nullfunc(wh->frame_control))
 		tx_ctrl->rate = 0;
 	pcie_tx_check_tcp_ack(skb, tx_ctrl);
-
-	if (skb_queue_len(&pcie_priv->txq[index]) > pcie_priv->txq_limit)
-		ieee80211_stop_queue(hw, SYSADPT_TX_WMM_QUEUES - index - 1);
 
 	skb_queue_tail(&pcie_priv->txq[index], skb);
 

@@ -682,11 +682,15 @@ static int mwl_mac80211_conf_tx(struct ieee80211_hw *hw,
 	}
 
 	if (!rc) {
-		int q = SYSADPT_TX_WMM_QUEUES - 1 - queue;
-
-		rc = mwl_fwcmd_set_edca_params(hw, q,
+		rc = mwl_fwcmd_set_edca_params(hw, queue,
 					       params->cw_min, params->cw_max,
 					       params->aifs, params->txop);
+		vif->hw_queue[queue] = queue % (IEEE80211_NUM_ACS - 1);
+		if (vif->type == NL80211_IFTYPE_AP ||
+		    vif->type == NL80211_IFTYPE_MESH_POINT)
+			vif->cab_queue = (IEEE80211_NUM_ACS - 1);
+		else
+			vif->cab_queue = IEEE80211_INVAL_HW_QUEUE;
 	}
 
 	return rc;

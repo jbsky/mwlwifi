@@ -344,7 +344,6 @@ static inline void pcie_tx_skb(struct mwl_priv *priv, int desc_num,
 	struct ieee80211_sta *sta;
 	struct ieee80211_vif *vif;
 	struct mwl_vif *mwl_vif;
-	bool ccmp = false;
 	struct pcie_pfu_dma_data *pfu_dma_data;
 	struct pcie_dma_data *dma_data;
 	struct ieee80211_hdr *wh;
@@ -693,7 +692,7 @@ next:
 static void pcie_non_pfu_tx_done(struct mwl_priv *priv)
 {
 	struct pcie_priv *pcie_priv = priv->hif.priv;
-	int num = SYSADPT_TX_WMM_QUEUES;
+	int num;
 	struct pcie_desc_data *desc;
 	struct pcie_tx_hndl *tx_hndl;
 	struct pcie_tx_desc *tx_desc;
@@ -705,7 +704,7 @@ static void pcie_non_pfu_tx_done(struct mwl_priv *priv)
 	int hdrlen;
 
 	spin_lock_bh(&pcie_priv->tx_desc_lock);
-	while (num--) {
+	for (num = 0; num < SYSADPT_TOTAL_HW_QUEUES; num++) {
 		desc = &pcie_priv->desc_data[num];
 		tx_hndl = desc->pstale_tx_hndl;
 		tx_desc = tx_hndl->pdesc;
@@ -826,11 +825,11 @@ void pcie_tx_skbs(unsigned long data)
 	struct ieee80211_hw *hw = (struct ieee80211_hw *)data;
 	struct mwl_priv *priv = hw->priv;
 	struct pcie_priv *pcie_priv = priv->hif.priv;
-	int num = SYSADPT_TX_WMM_QUEUES;
+	int num;
 	struct sk_buff *tx_skb;
 
 	spin_lock_bh(&pcie_priv->tx_desc_lock);
-	while (num--) {
+	for (num = 0; num < SYSADPT_TOTAL_HW_QUEUES; num++) {
 		while (skb_queue_len(&pcie_priv->txq[num]) > 0) {
 			if (!pcie_tx_available(priv, num))
 				break;
@@ -908,50 +907,31 @@ void pcie_tx_xmit(struct ieee80211_hw *hw,
 	struct mwl_vif *mwl_vif;
 	struct ieee80211_hdr *wh;
 	u8 xmitcontrol;
-	u16 qos;
+	u16 qos = 0;
 	u8 tid = 0;
 	struct mwl_ampdu_stream *stream = NULL;
 	bool start_ba_session = false;
 	bool mgmtframe = false;
-	struct ieee80211_mgmt *mgmt;
 	bool eapol_frame = false;
 	struct pcie_tx_ctrl *tx_ctrl;
 	int rc;
 
-	index = skb_get_queue_mapping(skb);
 	sta = control->sta;
 
 	wh = (struct ieee80211_hdr *)skb->data;
 	tx_info = IEEE80211_SKB_CB(skb);
+	index = tx_info->hw_queue;
 	mwl_vif = mwl_dev_get_vif(tx_info->control.vif);
 
-	if (ieee80211_is_data_qos(wh->frame_control))
+	if (ieee80211_is_data_qos(wh->frame_control) ||
+	    ieee80211_is_qos_nullfunc(wh->frame_control))
 		qos = le16_to_cpu(*((__le16 *)ieee80211_get_qos_ctl(wh)));
-	else
-		qos = 0;
 
-	if (ieee80211_is_mgmt(wh->frame_control)) {
+	if (ieee80211_is_mgmt(wh->frame_control))
 		mgmtframe = true;
-		mgmt = (struct ieee80211_mgmt *)skb->data;
-	} else {
-		u16 pkt_type;
-		struct mwl_sta *sta_info;
 
-		pkt_type = be16_to_cpu(*((__be16 *)
-			&skb->data[ieee80211_hdrlen(wh->frame_control) + 6]));
-		if (pkt_type == ETH_P_PAE) {
-			eapol_frame = true;
-		}
-		if (sta) {
-			if (mwl_vif->is_hw_crypto_enabled) {
-				sta_info = mwl_dev_get_sta(sta);
-				if (!sta_info->is_key_set && !eapol_frame) {
-					dev_kfree_skb_any(skb);
-					return;
-				}
-			}
-		}
-	}
+	if (skb->protocol == cpu_to_be16(ETH_P_PAE))
+		eapol_frame = true;
 
 	if (tx_info->flags & IEEE80211_TX_CTL_ASSIGN_SEQ) {
 		wh->seq_ctrl &= cpu_to_le16(IEEE80211_SCTL_FRAG);
@@ -962,24 +942,21 @@ void pcie_tx_xmit(struct ieee80211_hw *hw,
 	/* Setup firmware control bit fields for each frame type. */
 	xmitcontrol = 0;
 
-	if (mgmtframe || ieee80211_is_ctl(wh->frame_control)) {
-		qos = 0;
-	} else if (ieee80211_is_data(wh->frame_control)) {
+	if (ieee80211_is_data(wh->frame_control)) {
 		qos &= ~IEEE80211_QOS_CTL_ACK_POLICY_MASK;
 
 		if (tx_info->flags & IEEE80211_TX_CTL_AMPDU) {
 			xmitcontrol |= EAGLE_TXD_XMITCTRL_ENABLE_AMPDU;
 			qos |= IEEE80211_QOS_CTL_ACK_POLICY_BLOCKACK;
-		} else {
+		} else
 			xmitcontrol |= EAGLE_TXD_XMITCTRL_DISABLE_AMPDU;
-			qos |= IEEE80211_QOS_CTL_ACK_POLICY_NORMAL;
-		}
+	}
 
-		if (is_multicast_ether_addr(wh->addr1) ||
-		    eapol_frame ||
-		    tx_info->flags & IEEE80211_TX_CTL_USE_MINRATE ||
-		    ieee80211_is_any_nullfunc(wh->frame_control))
-			xmitcontrol |= EAGLE_TXD_XMITCTRL_USE_MC_RATE;
+	if (is_multicast_ether_addr(ieee80211_get_DA(wh)) ||
+	    eapol_frame ||
+	    tx_info->flags & IEEE80211_TX_CTL_USE_MINRATE ||
+	    ieee80211_is_any_nullfunc(wh->frame_control)) {
+		xmitcontrol |= EAGLE_TXD_XMITCTRL_USE_MC_RATE;
 	}
 
 	/* Queue ADDBA request in the respective data queue.  While setting up
@@ -992,18 +969,7 @@ void pcie_tx_xmit(struct ieee80211_hw *hw,
 	 * been setup.
 	 */
 	if (mgmtframe) {
-		u16 capab;
-
-		if (unlikely(ieee80211_is_action(wh->frame_control) &&
-			     mgmt->u.action.category == WLAN_CATEGORY_BACK &&
-			     mgmt->u.action.u.addba_req.action_code ==
-			     WLAN_ACTION_ADDBA_REQ)) {
-			capab = le16_to_cpu(mgmt->u.action.u.addba_req.capab);
-			tid = (capab & IEEE80211_ADDBA_PARAM_TID_MASK) >> 2;
-			index = utils_tid_to_ac(tid);
-		}
-
-		if (unlikely(ieee80211_is_assoc_req(wh->frame_control)))
+		if (ieee80211_is_assoc_req(wh->frame_control))
 			utils_add_basic_rates(hw->conf.chandef.chan->band, skb);
 	}
 
@@ -1012,10 +978,8 @@ void pcie_tx_xmit(struct ieee80211_hw *hw,
 	tx_ctrl->type = (mgmtframe ? IEEE_TYPE_MANAGEMENT : IEEE_TYPE_DATA);
 	tx_ctrl->xmit_control = xmitcontrol;
 
-	index = SYSADPT_TX_WMM_QUEUES - index - 1;
-	tx_ctrl->tx_priority = index;
-
-	if (sta && sta->ht_cap.ht_supported && !eapol_frame &&
+	if (sta && (sta->ht_cap.ht_supported || sta->vht_cap.vht_supported)
+	    && !eapol_frame &&
 	    ieee80211_is_data_qos(wh->frame_control)) {
 		tid = qos & 0xf;
 		pcie_tx_count_packet(sta, tid);
@@ -1090,12 +1054,10 @@ void pcie_tx_xmit(struct ieee80211_hw *hw,
 		}
 
 		spin_unlock_bh(&priv->stream_lock);
-	} else {
-		qos &= ~IEEE80211_QOS_CTL_ACK_POLICY_MASK;
-		qos |= IEEE80211_QOS_CTL_ACK_POLICY_NORMAL;
 	}
 
 	tx_ctrl->qos_ctrl = qos;
+	tx_ctrl->tx_priority = IEEE80211_NUM_ACS - skb_get_queue_mapping(skb) - 1;
 
 	skb_queue_tail(&pcie_priv->txq[index], skb);
 
