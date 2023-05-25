@@ -117,7 +117,7 @@ static int mwl_mac80211_start(struct ieee80211_hw *hw)
 	rc = mwl_fwcmd_radio_enable(hw);
 	if (rc)
 		goto fwcmd_fail;
-	rc = mwl_fwcmd_set_rate_adapt_mode(hw, 0);
+	rc = mwl_fwcmd_set_rate_adapt_mode(hw, priv->rate_adapt_mode);
 	if (rc)
 		goto fwcmd_fail;
 	rc = mwl_fwcmd_set_wmm_mode(hw, true);
@@ -126,7 +126,7 @@ static int mwl_mac80211_start(struct ieee80211_hw *hw)
 	rc = mwl_fwcmd_ht_guard_interval(hw, GUARD_INTERVAL_AUTO);
 	if (rc)
 		goto fwcmd_fail;
-	rc = mwl_fwcmd_set_dwds_stamode(hw, true);
+	rc = mwl_fwcmd_set_dwds_stamode(hw, priv->dwds_stamode);
 	if (rc)
 		goto fwcmd_fail;
 	if (priv->chip_type != MWL8864) {
@@ -134,7 +134,7 @@ static int mwl_mac80211_start(struct ieee80211_hw *hw)
 		if (rc)
 			goto fwcmd_fail;
 	}
-	rc = mwl_fwcmd_set_optimization_level(hw, 1);
+	rc = mwl_fwcmd_set_optimization_level(hw, priv->optimization_level);
 	if (rc)
 		goto fwcmd_fail;
 	if (priv->chip_type == MWL8997) {
