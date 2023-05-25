@@ -1680,6 +1680,9 @@ static ssize_t mwl_debugfs_feature_read(struct file *file,
 	len += scnprintf(p + len, size - len, "value to toggled\n");
 	len += scnprintf(p + len, size - len, "0|decrypt_rx: %d\n", priv->decrypt_rx);
 	len += scnprintf(p + len, size - len, "1|debug_ampdu: %d\n", priv->debug_ampdu);
+	len += scnprintf(p + len, size - len, "4|rate_adapt_mode: %d\n", priv->rate_adapt_mode);
+	len += scnprintf(p + len, size - len, "5|dwds_stamode: %d\n", priv->dwds_stamode);
+	len += scnprintf(p + len, size - len, "6|optimization_level: %d\n", priv->optimization_level);
 
 	ret = simple_read_from_buffer(ubuf, count, ppos, p, len);
 	free_page(page);
@@ -1692,6 +1695,7 @@ static ssize_t mwl_debugfs_feature_write(struct file *file,
 					    size_t count, loff_t *ppos)
 {
 	struct mwl_priv *priv = (struct mwl_priv *)file->private_data;
+	struct ieee80211_hw * hw = priv->hw;
 	unsigned long addr = get_zeroed_page(GFP_KERNEL);
 	char *buf = (char *)addr;
 	size_t buf_size = min_t(size_t, count, PAGE_SIZE - 1);
@@ -1713,7 +1717,18 @@ static ssize_t mwl_debugfs_feature_write(struct file *file,
 	switch(value){
 		case 0: priv->decrypt_rx = !priv->decrypt_rx; break;
 		case 1: priv->debug_ampdu = !priv->debug_ampdu; break;
+		case 4: priv->rate_adapt_mode = !priv->rate_adapt_mode; break;
+		case 5: priv->dwds_stamode = !priv->dwds_stamode; break;
+		case 6: priv->optimization_level = !priv->optimization_level; break;
 	}
+	switch(value){
+		case 4: ret = mwl_fwcmd_set_rate_adapt_mode    (hw, priv->rate_adapt_mode); break;
+		case 5: ret = mwl_fwcmd_set_dwds_stamode       (hw, priv->dwds_stamode); break;
+		case 6: ret = mwl_fwcmd_set_optimization_level (hw, priv->optimization_level); break;
+	}
+	if(ret)
+		goto err;
+
 	ret = count;
 
 err:

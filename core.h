@@ -359,6 +359,9 @@ struct mwl_priv {
 
 	bool debug_ampdu;
 	bool decrypt_rx;
+	bool rate_adapt_mode;
+	bool dwds_stamode;
+	bool optimization_level;
 };
 
 struct beacon_info {

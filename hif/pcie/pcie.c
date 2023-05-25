@@ -39,6 +39,12 @@
 #define CHECK_BA_TRAFFIC_TIME           HZ  /* 1 sec */
 #define CHECK_TX_DONE_TIME              50  /* msec */
 
+static bool rate_adapt_mode = false;
+static bool dwds_stamode = true;
+static bool optimization_level = true;
+static bool dump_probe = false;
+static bool dump_hostcmd = false;
+
 static struct pci_device_id pcie_id_tbl[] = {
 	{ PCI_VDEVICE(MARVELL, 0x2a55),     .driver_data = MWL8864, },
 	{ PCI_VDEVICE(MARVELL, 0x2b38),     .driver_data = MWL8897, },
@@ -1571,6 +1577,19 @@ static int pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	priv->antenna_rx = pcie_chip_tbl[priv->chip_type].antenna_rx;
 	pcie_priv = priv->hif.priv;
 	pcie_priv->mwl_priv = priv;
+
+	priv->rate_adapt_mode = rate_adapt_mode;
+	priv->dwds_stamode = dwds_stamode;
+	priv->optimization_level = optimization_level;
+	priv->dump_probe = dump_probe;
+	priv->dump_hostcmd = dump_hostcmd;
+
+	if(rate_adapt_mode)    pr_info("rate_adapt_mode");
+	if(dwds_stamode)       pr_info("dwds_stamode");
+	if(optimization_level) pr_info("optimization_level");
+	if(dump_probe)         pr_info("dump_probe");
+	if(dump_hostcmd)       pr_info("dump_hostcmd");
+
 	pcie_priv->pdev = pdev;
 	if (id->driver_data != MWL8964) {
 		pcie_priv->tx_head_room = PCIE_MIN_BYTES_HEADROOM;
@@ -1636,6 +1655,16 @@ static struct pci_driver mwl_pcie_driver = {
 	.remove   = pcie_remove
 };
 
+module_param(rate_adapt_mode, bool, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+MODULE_PARM_DESC(rate_adapt_mode, "rate adapt mode");
+module_param(optimization_level, bool, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+MODULE_PARM_DESC(optimization_level, "Optimization level");
+module_param(dwds_stamode, bool, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+MODULE_PARM_DESC(dwds_stamode, "dwds stamode");
+module_param(dump_probe, bool, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+MODULE_PARM_DESC(dump_probe, "dump_probe");
+module_param(dump_hostcmd, bool, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+MODULE_PARM_DESC(dump_hostcmd, "dump_hostcmd");
 module_pci_driver(mwl_pcie_driver);
 
 MODULE_DESCRIPTION(PCIE_DRV_DESC);
