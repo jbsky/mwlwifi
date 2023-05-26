@@ -514,6 +514,7 @@ void pcie_tx_xmit_ndp(struct ieee80211_hw *hw,
 	u8 *da;
 	u16 qos;
 	u8 tid = 0;
+	int tailpad = 0;
 	struct mwl_ampdu_stream *stream = NULL;
 	u16 tx_que_priority;
 	bool mgmtframe = false;
@@ -599,7 +600,15 @@ void pcie_tx_xmit_ndp(struct ieee80211_hw *hw,
 			ieee80211_tx_status(hw, ack_skb);
 		}
 
-		pcie_tx_encapsulate_frame(priv, skb, k_conf, NULL);
+		if (k_conf) {
+			switch (k_conf->cipher) {
+			case WLAN_CIPHER_SUITE_WEP40:
+			case WLAN_CIPHER_SUITE_WEP104: tailpad = 4; break;
+			case WLAN_CIPHER_SUITE_TKIP:   tailpad = 12;break;
+			case WLAN_CIPHER_SUITE_CCMP:   tailpad = 8; break;
+			}
+		}
+		pcie_tx_add_dma_header(priv, skb, 0, tailpad);
 	} else {
 		tid = qos & 0x7;
 		if (sta && sta->ht_cap.ht_supported && !eapol_frame &&
