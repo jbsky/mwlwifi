@@ -403,7 +403,7 @@ static inline void pcie_tx_skb(struct mwl_priv *priv, int desc_num,
 	dma = pci_map_single(pcie_priv->pdev, tx_skb->data,
 			     tx_skb->len, PCI_DMA_TODEVICE);
 	if (pci_dma_mapping_error(pcie_priv->pdev, dma)) {
-		dev_kfree_skb_any(tx_skb);
+		ieee80211_free_txskb(priv->hw, tx_skb);
 		wiphy_err(priv->hw->wiphy,
 			  "failed to map pci memory!\n");
 		return;
