@@ -1122,38 +1122,19 @@ int mwl_fwcmd_get_addr_value(struct ieee80211_hw *hw, u32 addr, u32 len,
 	return 0;
 }
 
-int mwl_fwcmd_max_tx_power(struct ieee80211_hw *hw,
-			   struct ieee80211_conf *conf, u8 fraction)
+int mwl_fwcmd_max_tx_power(struct ieee80211_hw *hw)
 {
+	struct ieee80211_conf *conf = &hw->conf;
 	struct ieee80211_channel *channel = conf->chandef.chan;
 	struct mwl_priv *priv = hw->priv;
-	int reduce_val = 0;
 	u16 band = 0, width = 0, sub_ch = 0;
 	u16 maxtxpow[SYSADPT_TX_GRP_PWR_LEVEL_TOTAL];
-	int i, tmp;
+	u8 power_level;
+	int i;
 	int rc = 0;
 
 	if ((priv->chip_type != MWL8997) && (priv->forbidden_setting))
 		return rc;
-
-	switch (fraction) {
-	case 0:
-		reduce_val = 0;    /* Max */
-		break;
-	case 1:
-		reduce_val = 2;    /* 75% -1.25db */
-		break;
-	case 2:
-		reduce_val = 3;    /* 50% -3db */
-		break;
-	case 3:
-		reduce_val = 6;    /* 25% -6db */
-		break;
-	default:
-		/* larger than case 3,  pCmd->MaxPowerLevel is min */
-		reduce_val = 0xff;
-		break;
-	}
 
 	if (channel->band == NL80211_BAND_2GHZ)
 		band = FREQ_BAND_2DOT4GHZ;
@@ -1189,80 +1170,75 @@ int mwl_fwcmd_max_tx_power(struct ieee80211_hw *hw,
 					HOSTCMD_ACT_GET_MAX_TX_PWR,
 					channel->hw_value, band, width, sub_ch);
 
-		for (i = 0; i < priv->pwr_level; i++) {
-			tmp = priv->max_tx_pow[i];
-			maxtxpow[i] = ((tmp - reduce_val) > 0) ?
-				(tmp - reduce_val) : 0;
-		}
+		for (i = 0; i < priv->pwr_level; i++)
+			maxtxpow[i] = priv->max_tx_pow[i];
 
-		rc = mwl_fwcmd_set_tx_powers(priv, maxtxpow,
+		return mwl_fwcmd_set_tx_powers(priv, maxtxpow,
 					     HOSTCMD_ACT_SET_MAX_TX_PWR,
 					     channel->hw_value, band,
 					     width, sub_ch);
-		return rc;
 	}
 
-	if ((priv->powinited & MWL_POWER_INIT_2) == 0) {
-		mwl_fwcmd_get_tx_powers(priv, priv->max_tx_pow,
-					HOSTCMD_ACT_GEN_GET_LIST,
-					channel->hw_value, band, width, sub_ch);
-		priv->powinited |= MWL_POWER_INIT_2;
-	}
-
-	if ((priv->powinited & MWL_POWER_INIT_1) == 0) {
-		mwl_fwcmd_get_tx_powers(priv, priv->target_powers,
-					HOSTCMD_ACT_GEN_GET_LIST,
-					channel->hw_value, band, width, sub_ch);
-		priv->powinited |= MWL_POWER_INIT_1;
-	}
+	if(SYSADPT_MAX_TXPOWER < conf->power_level)
+		power_level = SYSADPT_MAX_TXPOWER;
+	else
+		power_level = conf->power_level;
 
 	for (i = 0; i < priv->pwr_level; i++) {
-		if (priv->target_powers[i] > priv->max_tx_pow[i])
-			tmp = priv->max_tx_pow[i];
-		else
-			tmp = priv->target_powers[i];
-		maxtxpow[i] = ((tmp - reduce_val) > 0) ? (tmp - reduce_val) : 0;
+		priv->max_tx_pow[i] = power_level;
+		maxtxpow[i] = power_level;
 	}
 
 	rc = mwl_fwcmd_set_tx_powers(priv, maxtxpow, HOSTCMD_ACT_GEN_SET,
 				     channel->hw_value, band, width, sub_ch);
 
+	if(priv->debug_txpower)
+		for (i = 0; i < priv->pwr_level; i++) {
+			wiphy_debug(hw->wiphy,"max_power set to priv->max_tx_pow[%d]=%d\n",
+			i, priv->max_tx_pow[i]);
+		}
+
+	if(rc)
+		wiphy_err(hw->wiphy,"txwer error!");
+
 	return rc;
 }
 
-int mwl_fwcmd_tx_power(struct ieee80211_hw *hw,
-		       struct ieee80211_conf *conf, u8 fraction)
+void mwl_fwcmd_tx_power(struct work_struct *work)
 {
+	struct mwl_priv *priv =
+		container_of(work, struct mwl_priv, txpower.work);
+	struct ieee80211_hw *hw = priv->hw;
+	struct ieee80211_conf *conf = &hw->conf;
+	u8 power_level;
 	struct ieee80211_channel *channel = conf->chandef.chan;
-	struct mwl_priv *priv = hw->priv;
-	int reduce_val = 0;
+	int reduce_val, delta, i, index;
 	u16 band = 0, width = 0, sub_ch = 0;
 	u16 txpow[SYSADPT_TX_GRP_PWR_LEVEL_TOTAL];
-	int index, found = 0;
-	int i, tmp;
+	u16 fwtxpow[SYSADPT_TX_GRP_PWR_LEVEL_TOTAL];
+	int found = 0;
 	int rc = 0;
 
 	if ((priv->chip_type != MWL8997) && (priv->forbidden_setting))
-		return rc;
+		return;
 
-	switch (fraction) {
-	case 0:
-		reduce_val = 0;    /* Max */
-		break;
-	case 1:
-		reduce_val = 2;    /* 75% -1.25db */
-		break;
-	case 2:
-		reduce_val = 3;    /* 50% -3db */
-		break;
-	case 3:
-		reduce_val = 6;    /* 25% -6db */
-		break;
-	default:
-		/* larger than case 3,  pCmd->MaxPowerLevel is min */
-		reduce_val = 0xff;
-		break;
+	if(conf->power_level > priv->max_tx_pow[0] || conf->power_level < 0) {
+		reduce_val = 0;
+		power_level = priv->max_tx_pow[0];
 	}
+	else {
+		if(conf->power_level < SYSADPT_MIN_TXPOWER)
+			power_level = SYSADPT_MIN_TXPOWER;
+		else if(conf->power_level > SYSADPT_MAX_TXPOWER)
+			power_level = SYSADPT_MAX_TXPOWER;
+		else
+			power_level = conf->power_level;
+
+		reduce_val = priv->max_tx_pow[0] - power_level;
+	}
+
+	if(priv->debug_txpower)
+		wiphy_debug(priv->hw->wiphy, "mwl_fwcmd_tx_power: power_level: %d, reduce_val: %d\n", power_level, reduce_val);
 
 	if (channel->band == NL80211_BAND_2GHZ)
 		band = FREQ_BAND_2DOT4GHZ;
@@ -1290,7 +1266,7 @@ int mwl_fwcmd_tx_power(struct ieee80211_hw *hw,
 			sub_ch = EXT_CH_BELOW_CTRL_CH;
 		break;
 	default:
-		return -EINVAL;
+		return;
 	}
 
 	if (priv->chip_type == MWL8997) {
@@ -1298,18 +1274,15 @@ int mwl_fwcmd_tx_power(struct ieee80211_hw *hw,
 					HOSTCMD_ACT_GET_TARGET_TX_PWR,
 					channel->hw_value, band, width, sub_ch);
 
-		for (i = 0; i < priv->pwr_level; i++) {
-			tmp = priv->target_powers[i];
-			txpow[i] = ((tmp - reduce_val) > 0) ?
-				(tmp - reduce_val) : 0;
-		}
+		for (i = 0; i < priv->pwr_level; i++)
+			txpow[i] = ((priv->target_powers[i] - reduce_val) > 0) ? (priv->target_powers[i] - reduce_val) : 0;
 
 		rc = mwl_fwcmd_set_tx_powers(priv, txpow,
 					     HOSTCMD_ACT_SET_TARGET_TX_PWR,
 					     channel->hw_value, band,
 					     width, sub_ch);
 
-		return rc;
+		return;
 	}
 
 	/* search tx power table if exist */
@@ -1325,64 +1298,57 @@ int mwl_fwcmd_tx_power(struct ieee80211_hw *hw,
 		if (tx_pwr->channel == channel->hw_value) {
 			priv->cdd = tx_pwr->cdd;
 			priv->txantenna2 = tx_pwr->txantenna2;
-
-			if (tx_pwr->setcap)
-				priv->powinited = MWL_POWER_INIT_1;
-			else
-				priv->powinited = MWL_POWER_INIT_2;
-
-			for (i = 0; i < priv->pwr_level; i++) {
-				if (tx_pwr->setcap)
-					priv->max_tx_pow[i] =
-						tx_pwr->tx_power[i];
-				else
-					priv->target_powers[i] =
-						tx_pwr->tx_power[i];
-			}
+			priv->index_tx_pwr_tbl = index;
 
 			found = 1;
+			if(priv->debug_txpower)
+				wiphy_debug(hw->wiphy,"tx_power found index: %d, setcap: %d antenna: %d, cdd: %d, channel: %d\n", index, priv->tx_pwr_tbl[index].setcap, priv->tx_pwr_tbl[index].txantenna2, priv->tx_pwr_tbl[index].cdd, tx_pwr->channel );
+
+
 			break;
 		}
 	}
 
-	if ((priv->powinited & MWL_POWER_INIT_2) == 0) {
-		mwl_fwcmd_get_tx_powers(priv, priv->max_tx_pow,
-					HOSTCMD_ACT_GEN_GET_LIST,
-					channel->hw_value, band, width, sub_ch);
+	mwl_fwcmd_get_tx_powers(priv, fwtxpow,
+				HOSTCMD_ACT_GEN_GET_LIST,
+				channel->hw_value, band, width, sub_ch);
 
-		priv->powinited |= MWL_POWER_INIT_2;
+	if(found) {
+		delta = priv->max_tx_pow[0] - priv->tx_pwr_tbl[index].tx_power[0];
+		for (i = 0; i < priv->pwr_level; i++)
+			txpow[i] = ((int)(priv->tx_pwr_tbl[index].tx_power[i] + delta - reduce_val) > 0 ? priv->tx_pwr_tbl[index].tx_power[i] + delta - reduce_val : 0);
 	}
-
-	if ((priv->powinited & MWL_POWER_INIT_1) == 0) {
-		mwl_fwcmd_get_tx_powers(priv, priv->target_powers,
-					HOSTCMD_ACT_GEN_GET_LIST,
-					channel->hw_value, band, width, sub_ch);
-
-		priv->powinited |= MWL_POWER_INIT_1;
-	}
-
-	for (i = 0; i < priv->pwr_level; i++) {
-		if (found) {
-			if ((priv->tx_pwr_tbl[index].setcap) &&
-			    (priv->tx_pwr_tbl[index].tx_power[i] >
-			    priv->max_tx_pow[i]))
-				tmp = priv->max_tx_pow[i];
-			else
-				tmp = priv->tx_pwr_tbl[index].tx_power[i];
-		} else {
-			if (priv->target_powers[i] > priv->max_tx_pow[i])
-				tmp = priv->max_tx_pow[i];
-			else
-				tmp = priv->target_powers[i];
-		}
-
-		txpow[i] = ((tmp - reduce_val) > 0) ? (tmp - reduce_val) : 0;
-	}
+	else
+		for (i = 0; i < priv->pwr_level; i++)
+			txpow[i] = power_level;
 
 	rc = mwl_fwcmd_set_tx_powers(priv, txpow, HOSTCMD_ACT_GEN_SET_LIST,
 				     channel->hw_value, band, width, sub_ch);
 
-	return rc;
+	mwl_fwcmd_get_tx_powers(priv, priv->target_powers,
+				HOSTCMD_ACT_GEN_GET_LIST,
+				channel->hw_value, band, width, sub_ch);
+	if(priv->debug_txpower) {
+		if(found)
+			for (i = 0; i < priv->pwr_level; i++)
+				wiphy_debug(hw->wiphy,"tx_power priv->tx_pwr_tbl[%d].tx_power[%d]=%d; fwtxpow[%d]=%d; priv->max_tx_pow[%d]=%d > txpow[%d]=%d, priv->target_powers[%d]=%d\n",
+					    index, i, priv->tx_pwr_tbl[index].tx_power[i],
+					    i, fwtxpow[i],
+					    i, priv->max_tx_pow[i],
+					    i, txpow[i],
+					    i, priv->target_powers[i]);
+		else
+			for (i = 0; i < priv->pwr_level; i++)
+				wiphy_debug(hw->wiphy,"tx_power fwtxpow[%d]=%d; priv->max_tx_pow[%d]=%d > txpow[%d]=%d, priv->target_powers[%d]=%d\n",
+					    i, fwtxpow[i],
+					    i, priv->max_tx_pow[i],
+					    i, txpow[i],
+					    i, priv->target_powers[i]);
+	}
+
+	if(priv->cdd)
+		mwl_fwcmd_set_cdd(hw);
+
 }
 
 int mwl_fwcmd_rf_antenna(struct ieee80211_hw *hw, int dir, int antenna)

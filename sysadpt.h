@@ -51,6 +51,12 @@
 #define SYSADPT_TOTAL_TX_QUEUES        (SYSADPT_TX_WMM_QUEUES + \
 					SYSADPT_NUM_OF_AP)
 
+#define SYSADPT_DELAY_TXPOWER          (10 * HZ)
+
+#define SYSADPT_MIN_TXPOWER            0x0A
+
+#define SYSADPT_MAX_TXPOWER            0x1F
+
 #define SYSADPT_MAX_AGGR_SIZE          4096
 
 #define SYSADPT_AMPDU_PACKET_THRESHOLD 64

@@ -249,10 +249,12 @@ struct mwl_priv {
 	struct mwl_tx_pwr_tbl tx_pwr_tbl[SYSADPT_MAX_NUM_CHANNELS];
 	bool cdd;
 	u16 txantenna2;
-	u8 powinited;
+	u8 index_tx_pwr_tbl;
 	u8 pwr_level;
 	u16 max_tx_pow[SYSADPT_TX_GRP_PWR_LEVEL_TOTAL]; /* max tx power (dBm) */
 	u16 target_powers[SYSADPT_TX_GRP_PWR_LEVEL_TOTAL]; /* target powers   */
+	struct delayed_work txpower;
+	bool debug_txpower;
 
 	struct mutex fwcmd_mutex;    /* for firmware command         */
 	unsigned short *pcmd_buf;    /* pointer to CmdBuf (virtual)  */
@@ -359,6 +361,7 @@ struct mwl_priv {
 	bool coredump_text;
 	u32 ra_tx_attempt[2][6];
 
+	bool debug_config;
 	bool debug_ampdu;
 	bool decrypt_rx;
 	bool rate_adapt_mode;

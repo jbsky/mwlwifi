@@ -807,6 +807,32 @@ static ssize_t mwl_debugfs_device_pwrtbl_read(struct file *file,
 				 priv->device_pwr_tbl[i].cdd);
 	}
 
+	if(priv->index_tx_pwr_tbl != -1) {
+		struct mwl_tx_pwr_tbl *tx_pwr;
+		tx_pwr = &priv->tx_pwr_tbl[priv->index_tx_pwr_tbl];
+		len += scnprintf(p + len, size - len, " i|max|target|chann|cap|ant|txpower|cdd\n");
+
+		for (i = 0; i < priv->pwr_level; i++) {
+			len += scnprintf(p + len, size - len, "%2d|%3d|%6d|%5d|%3d|%3d|%7d|%1d\n",
+				i,
+				priv->max_tx_pow[i],
+				priv->target_powers[i],
+				tx_pwr->channel,
+				tx_pwr->setcap,
+				tx_pwr->txantenna2,
+				tx_pwr->tx_power[i],
+				tx_pwr->cdd);
+		}
+	}
+	else {
+		len += scnprintf(p + len, size - len, " i|max|target\n");
+		for (i = 0; i < priv->pwr_level; i++) {
+			len += scnprintf(p + len, size - len, "%2d|%3d|%6d\n",
+				i,
+				priv->max_tx_pow[i],
+				priv->target_powers[i]);
+		}
+	}
 	ret = simple_read_from_buffer(ubuf, count, ppos, p, len);
 	free_page(page);
 

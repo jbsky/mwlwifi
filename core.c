@@ -795,7 +795,7 @@ static int mwl_wl_init(struct mwl_priv *priv)
 	priv->radio_on = false;
 	priv->radio_short_preamble = false;
 	priv->wmm_enabled = false;
-	priv->powinited = 0;
+	priv->index_tx_pwr_tbl = -1;
 	priv->wds_check = false;
 	if (priv->chip_type == MWL8997)
 		priv->pwr_level = SYSADPT_TX_GRP_PWR_LEVEL_TOTAL;
@@ -817,6 +817,7 @@ static int mwl_wl_init(struct mwl_priv *priv)
 	INIT_WORK(&priv->account_handle, mwl_account_handle);
 	INIT_WORK(&priv->wds_check_handle, mwl_wds_check_handle);
 	INIT_WORK(&priv->chnl_switch_handle, mwl_chnl_switch_event);
+	INIT_DELAYED_WORK(&priv->txpower, mwl_fwcmd_tx_power);
 	INIT_DELAYED_WORK(&priv->beaconing, mgmt_beaconing);
 
 	mutex_init(&priv->fwcmd_mutex);
@@ -974,6 +975,7 @@ static void mwl_wl_deinit(struct mwl_priv *priv)
 		kfree(hw->wiphy->addresses);
 	ieee80211_unregister_hw(hw);
 	mwl_thermal_unregister(priv);
+	cancel_delayed_work(&priv->txpower);
 	cancel_delayed_work(&priv->beaconing);
 	priv->beaconing_started = false;
 	cancel_work_sync(&priv->chnl_switch_handle);
@@ -1045,6 +1047,9 @@ struct ieee80211_hw *mwl_alloc_hw(int bus_type,
 	priv->available_stnid = 0;
 
 	SET_IEEE80211_DEV(hw, dev);
+
+	priv->debug_txpower = false;
+	priv->debug_config = false;
 
 	return hw;
 }
