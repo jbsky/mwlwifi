@@ -336,7 +336,7 @@ int pcie_tx_init_ndp(struct ieee80211_hw *hw)
 
 	if (sizeof(struct pcie_tx_ctrl_ndp) >
 	    sizeof(tx_info->driver_data)) {
-		wiphy_err(hw->wiphy, "driver data is not enough: %d (%d)\n",
+		wiphy_err(hw->wiphy, "driver data is not enough: %zu (%zu)\n",
 			  sizeof(struct pcie_tx_ctrl_ndp),
 			  sizeof(tx_info->driver_data));
 		return -ENOMEM;
@@ -610,7 +610,7 @@ void pcie_tx_xmit_ndp(struct ieee80211_hw *hw,
 		pcie_tx_encapsulate_frame(priv, skb, k_conf);
 	} else {
 		tid = qos & 0x7;
-		if (sta && sta->ht_cap.ht_supported && !eapol_frame &&
+		if (sta && sta->deflink.ht_cap.ht_supported && !eapol_frame &&
 		    qos != 0xFFFF) {
 			pcie_tx_count_packet(sta, tid);
 			spin_lock_bh(&priv->stream_lock);

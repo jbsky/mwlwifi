@@ -56,7 +56,7 @@ void mgmt_beaconing(struct work_struct *work)
 		if (mwl_vif->nexttbtt <= jiffies && (
 		    vif->type == NL80211_IFTYPE_AP ||
 		    vif->type == NL80211_IFTYPE_MESH_POINT)) {
-			skb = ieee80211_beacon_get(hw, vif);
+			skb = ieee80211_beacon_get(hw, vif, 0);
 
 			if (!skb)
 				break;

@@ -774,7 +774,8 @@ static struct device_node *pcie_get_device_node(struct ieee80211_hw *hw)
 	struct device_node *dev_node;
 
 	dev_node = pci_bus_to_OF_node(pcie_priv->pdev->bus);
-	wiphy_info(priv->hw->wiphy, "device node: %s\n", dev_node->full_name);
+	if (dev_node)
+		wiphy_info(priv->hw->wiphy, "device node: %s\n", dev_node->full_name);
 
 	return dev_node;
 }
@@ -1552,8 +1553,8 @@ static void pcie_bf_mimo_ctrl_decode(struct mwl_priv *priv,
 			       &fp_data->f_pos);
 		filp_close(fp_data, current->files);
 	} else {
-		wiphy_err(priv->hw->wiphy, "Error opening %s! %x\n",
-			  filename, (unsigned int)fp_data);
+		wiphy_err(priv->hw->wiphy, "Error opening %s! %ld\n",
+			  filename, PTR_ERR(fp_data));
 	}
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,10,0)

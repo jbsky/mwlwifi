@@ -289,7 +289,7 @@ int mwl_fwcmd_set_country_code(struct mwl_priv *priv,
 int mwl_fwcmd_set_spectrum_mgmt(struct mwl_priv *priv, bool enable);
 
 int mwl_fwcmd_set_ap_beacon(struct mwl_priv *priv,
-				   struct mwl_vif *mwl_vif,
+				   struct ieee80211_vif *vif,
 				   struct ieee80211_bss_conf *bss_conf);
 
 int mwl_fwcmd_set_ies(struct mwl_priv *priv, struct mwl_vif *mwl_vif);
