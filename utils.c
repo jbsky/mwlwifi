@@ -173,9 +173,9 @@ u32 utils_get_init_tx_rate(struct mwl_priv *priv, struct ieee80211_conf *conf,
 	u32 tx_rate;
 	u16 format, nss, bw, rate_mcs;
 
-	if (sta->vht_cap.vht_supported)
+	if (sta->deflink.vht_cap.vht_supported)
 		format = TX_RATE_FORMAT_11AC;
-	else if (sta->ht_cap.ht_supported)
+	else if (sta->deflink.ht_cap.ht_supported)
 		format = TX_RATE_FORMAT_11N;
 	else
 		format = TX_RATE_FORMAT_LEGACY;
@@ -192,11 +192,11 @@ u32 utils_get_init_tx_rate(struct mwl_priv *priv, struct ieee80211_conf *conf,
 		nss = 3;
 		break;
 	default:
-		nss = sta->rx_nss;
+		nss = sta->deflink.rx_nss;
 		break;
 	}
-	if (nss > sta->rx_nss)
-		nss = sta->rx_nss;
+	if (nss > sta->deflink.rx_nss)
+		nss = sta->deflink.rx_nss;
 
 	switch (conf->chandef.width) {
 	case NL80211_CHAN_WIDTH_20_NOHT:
@@ -213,11 +213,11 @@ u32 utils_get_init_tx_rate(struct mwl_priv *priv, struct ieee80211_conf *conf,
 		bw = TX_RATE_BANDWIDTH_160;
 		break;
 	default:
-		bw = sta->bandwidth;
+		bw = sta->deflink.bandwidth;
 		break;
 	}
-	if (bw > sta->bandwidth)
-		bw = sta->bandwidth;
+	if (bw > sta->deflink.bandwidth)
+		bw = sta->deflink.bandwidth;
 
 	switch (format) {
 	case TX_RATE_FORMAT_LEGACY:

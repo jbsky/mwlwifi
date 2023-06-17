@@ -81,7 +81,7 @@ static int pcie_txbd_ring_create(struct mwl_priv *priv)
 	wiphy_info(priv->hw->wiphy,
 		   "TX ring: - base: %p, pbase: 0x%x, len: %d\n",
 		   pcie_priv->txbd_ring_vbase,
-		   pcie_priv->txbd_ring_pbase,
+		   (u32)pcie_priv->txbd_ring_pbase,
 		   pcie_priv->txbd_ring_size);
 
 	for (num = 0; num < PCIE_MAX_TXRX_BD; num++) {
@@ -676,7 +676,7 @@ void pcie_8997_tx_xmit(struct ieee80211_hw *hw,
 	    tx_info->flags & IEEE80211_TX_CTL_USE_MINRATE)
 		xmitcontrol |= EAGLE_TXD_XMITCTRL_USE_MC_RATE;
 
-	if (sta && sta->ht_cap.ht_supported && !eapol_frame &&
+	if (sta && sta->deflink.ht_cap.ht_supported && !eapol_frame &&
 	    ieee80211_is_data_qos(wh->frame_control)) {
 		tid = qos & 0xf;
 		pcie_tx_count_packet(sta, tid);

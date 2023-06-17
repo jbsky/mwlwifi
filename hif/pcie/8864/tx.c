@@ -515,7 +515,7 @@ void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
 	    tx_info->flags & IEEE80211_TX_CTL_USE_MINRATE)
 		xmitcontrol |= EAGLE_TXD_XMITCTRL_USE_MC_RATE;
 
-	if (sta && sta->ht_cap.ht_supported && !eapol_frame &&
+	if (sta && sta->deflink.ht_cap.ht_supported && !eapol_frame &&
 	    ieee80211_is_data_qos(wh->frame_control)) {
 		tid = qos & 0xf;
 		pcie_tx_count_packet(sta, tid);
