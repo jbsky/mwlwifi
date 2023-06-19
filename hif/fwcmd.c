@@ -653,10 +653,11 @@ int mwl_fwcmd_set_ap_beacon(struct mwl_priv *priv,
 	pcmd->cmd_hdr.len = cpu_to_le16(sizeof(*pcmd));
 	pcmd->cmd_hdr.macid = mwl_vif->macid;
 
-	ether_addr_copy(pcmd->start_cmd.sta_mac_addr, mwl_vif->bssid);
+	ether_addr_copy(pcmd->start_cmd.sta_mac_addr, vif->bss_conf.bssid);
 	memcpy(pcmd->start_cmd.ssid, vif->cfg.ssid, vif->cfg.ssid_len);
 	if (priv->chip_type == MWL8997)
-		ether_addr_copy(pcmd->start_cmd.bssid, mwl_vif->bssid);
+		ether_addr_copy(pcmd->start_cmd.bssid, vif->bss_conf.bssid);
+
 	pcmd->start_cmd.bss_type = 1;
 	pcmd->start_cmd.bcn_period  = cpu_to_le16(bss_conf->beacon_int);
 	pcmd->start_cmd.dtim_period = bss_conf->dtim_period; /* 8bit */
