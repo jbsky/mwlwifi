@@ -381,7 +381,7 @@ out:
 static void mwl_mac80211_bss_info_changed_sta(struct ieee80211_hw *hw,
 					      struct ieee80211_vif *vif,
 					      struct ieee80211_bss_conf *info,
-					      u32 changed)
+					      u64 changed)
 {
 	struct mwl_priv *priv = hw->priv;
 
