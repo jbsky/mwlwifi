@@ -1008,7 +1008,10 @@ struct ieee80211_hw *mwl_alloc_hw(int bus_type,
 	priv->use_short_preamble = false;
 	priv->disable_2g = false;
 	priv->disable_5g = false;
-	priv->tx_amsdu = true;
+	if(priv->chip_type != MWL8864)
+		priv->tx_amsdu = true;
+	else
+		priv->tx_amsdu = false;
 	priv->hif.bus = bus_type;
 	priv->hif.ops = ops;
 	priv->hif.priv = (char *)priv + ALIGN(sizeof(*priv), NETDEV_ALIGN);
