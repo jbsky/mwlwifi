@@ -776,7 +776,7 @@ static int mwl_mac80211_get_stats(struct ieee80211_hw *hw,
 	return mwl_fwcmd_get_stat(hw, stats);
 }
 
-static int mwl_mac80211_get_survey(struct ieee80211_hw *hw,
+static inline int mwl_mac80211_get_survey(struct ieee80211_hw *hw,
 				   int idx,
 				   struct survey_info *survey)
 {

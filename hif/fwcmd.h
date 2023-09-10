@@ -193,24 +193,24 @@ int mwl_fwcmd_destroy_ba(struct ieee80211_hw *hw,
 			 struct mwl_ampdu_stream *stream,
 			 u32 direction);
 
-struct mwl_ampdu_stream *mwl_fwcmd_add_stream(struct ieee80211_hw *hw,
-					      struct ieee80211_sta *sta,
-					      u8 tid);
+inline struct mwl_ampdu_stream *mwl_fwcmd_add_stream(struct ieee80211_hw *hw,
+						     struct ieee80211_sta *sta,
+						     u8 tid);
 
 void mwl_fwcmd_del_sta_streams(struct ieee80211_hw *hw,
 			       struct ieee80211_sta *sta);
 
-int mwl_fwcmd_start_stream(struct ieee80211_hw *hw,
-			   struct mwl_ampdu_stream *stream);
+inline int mwl_fwcmd_start_stream(struct ieee80211_hw *hw,
+				  struct mwl_ampdu_stream *stream);
 
-void mwl_fwcmd_remove_stream(struct ieee80211_hw *hw,
-			     struct mwl_ampdu_stream *stream);
+inline void mwl_fwcmd_remove_stream(struct ieee80211_hw *hw,
+				    struct mwl_ampdu_stream *stream);
 
-struct mwl_ampdu_stream *mwl_fwcmd_lookup_stream(struct ieee80211_hw *hw,
-						 struct ieee80211_sta *sta,
-						 u8 tid);
+inline struct mwl_ampdu_stream *mwl_fwcmd_lookup_stream(struct ieee80211_hw *hw,
+							struct ieee80211_sta *sta,
+							u8 tid);
 
-bool mwl_fwcmd_ampdu_allowed(struct ieee80211_sta *sta, u8 tid);
+inline bool mwl_fwcmd_ampdu_allowed(struct ieee80211_sta *sta, u8 tid);
 
 int mwl_fwcmd_set_optimization_level(struct ieee80211_hw *hw, u8 opt_level);
 
@@ -277,7 +277,7 @@ int mwl_fwcmd_get_txpwrlmt_cfg_data(struct ieee80211_hw *hw);
 
 int mwl_fwcmd_mcast_cts(struct ieee80211_hw *hw, u8 enable);
 
-void mwl_fwcmd_get_survey(struct ieee80211_hw *hw, int idx);
+inline void mwl_fwcmd_get_survey(struct ieee80211_hw *hw, int idx);
 
 int mwl_fwcmd_set_power_constraint(struct mwl_priv *priv,
 					  u32 power_constraint);
