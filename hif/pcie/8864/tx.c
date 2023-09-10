@@ -463,6 +463,7 @@ void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
 	bool start_ba_session = false;
 	bool eapol_frame = false;
 	int rc;
+	u8 idx;
 
 	if(control)
 		sta = control->sta;
@@ -510,17 +511,31 @@ void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
 		pcie_tx_count_packet(sta, tid);
 
 		spin_lock_bh(&priv->stream_lock);
-		stream = mwl_fwcmd_lookup_stream(hw, sta, tid);
+
+		for (idx = 0; idx < priv->ampdu_num; idx++) {
+			stream = &priv->ampdu[idx];
+			if (stream->state == AMPDU_NO_STREAM)
+				continue;
+
+			if ((stream->sta == sta) && (stream->tid == tid))
+				goto stream_found;
+		}
+
+		goto no_stream;
 
 		if (stream) {
+stream_found:
 			if (stream->state == AMPDU_STREAM_ACTIVE)
 				txpriority = (SYSADPT_TX_WMM_QUEUES + stream->idx) % TOTAL_HW_QUEUES;
 		}
-		else if (mwl_fwcmd_ampdu_allowed(sta, tid)) {
-			stream = mwl_fwcmd_add_stream(hw, sta, tid);
+		else {
+no_stream:
+			if (mwl_fwcmd_ampdu_allowed(sta, tid)) {
+				stream = mwl_fwcmd_add_stream(hw, sta, tid);
 
-			if (stream)
-				start_ba_session = true;
+				if (stream)
+					start_ba_session = true;
+			}
 		}
 
 		spin_unlock_bh(&priv->stream_lock);
