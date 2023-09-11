@@ -414,7 +414,6 @@ static void pcie_pfu_tx_done(struct mwl_priv *priv)
 			if (ieee80211_is_nullfunc(wh->frame_control) ||
 			    ieee80211_is_qos_nullfunc(wh->frame_control)) {
 				dev_kfree_skb_any(done_skb);
-				done_skb = NULL;
 				goto next;
 			}
 
