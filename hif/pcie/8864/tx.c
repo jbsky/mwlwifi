@@ -353,12 +353,6 @@ static void pcie_non_pfu_tx_done(struct pcie_txq *pcie_txq)
 
 		dma_data = (struct pcie_dma_data *)done_skb->data;
 		wh = &dma_data->wh;
-		if (ieee80211_is_nullfunc(wh->frame_control) ||
-		    ieee80211_is_qos_nullfunc(wh->frame_control)) {
-			dev_kfree_skb_any(done_skb);
-			done_skb = NULL;
-			goto next;
-		}
 
 		info = IEEE80211_SKB_CB(done_skb);
 		if (ieee80211_is_data(wh->frame_control) ||
@@ -383,7 +377,6 @@ static void pcie_non_pfu_tx_done(struct pcie_txq *pcie_txq)
 			dev_kfree_skb_any(done_skb);
 			done_skb = NULL;
 		}
-next:
 		tx_hndl = tx_hndl->pnext;
 		tx_desc = tx_hndl->pdesc;
 		pcie_txq->fw_desc_cnt--;
