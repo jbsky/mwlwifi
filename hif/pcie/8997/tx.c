@@ -435,12 +435,6 @@ static void pcie_pfu_tx_done(struct mwl_priv *priv)
 			wmb(); /* memory barrier */
 
 			wh = &dma_data->wh;
-			if (ieee80211_is_nullfunc(wh->frame_control) ||
-			    ieee80211_is_qos_nullfunc(wh->frame_control)) {
-				dev_kfree_skb_any(done_skb);
-				done_skb = NULL;
-				goto next;
-			}
 
 			info = IEEE80211_SKB_CB(done_skb);
 			tx_ctrl = (struct pcie_tx_ctrl *)info->driver_data;
@@ -471,7 +465,7 @@ static void pcie_pfu_tx_done(struct mwl_priv *priv)
 				ieee80211_tx_status(priv->hw, done_skb);
 			}
 		}
-next:
+
 		memset(data_buf, 0, sizeof(*data_buf));
 		pcie_priv->tx_buf_list[wrdoneidx] = NULL;
 
