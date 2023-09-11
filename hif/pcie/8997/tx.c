@@ -184,9 +184,6 @@ static inline void pcie_tx_skb(struct mwl_priv *priv,
 	struct pcie_data_buf *data_buf;
 	const u32 num_tx_buffs = PCIE_MAX_TXRX_BD << PCIE_TX_START_PTR;
 
-	if (WARN_ON(!tx_skb))
-		return;
-
 	tx_info = IEEE80211_SKB_CB(tx_skb);
 	tx_ctrl = (struct pcie_tx_ctrl *)tx_info->driver_data;
 	sta = (struct ieee80211_sta *)tx_ctrl->sta;
@@ -414,7 +411,6 @@ static void pcie_pfu_tx_done(struct mwl_priv *priv)
 			if (ieee80211_is_nullfunc(wh->frame_control) ||
 			    ieee80211_is_qos_nullfunc(wh->frame_control)) {
 				dev_kfree_skb_any(done_skb);
-				done_skb = NULL;
 				goto next;
 			}
 
@@ -584,58 +580,45 @@ void pcie_8997_tx_xmit(struct ieee80211_hw *hw,
 {
 	struct mwl_priv *priv = hw->priv;
 	struct pcie_priv *pcie_priv = priv->hif.priv;
-	int index;
-	struct ieee80211_sta *sta;
-	struct ieee80211_tx_info *tx_info;
-	struct mwl_vif *mwl_vif;
-	struct ieee80211_hdr *wh;
-	u8 xmitcontrol;
-	u16 qos;
-	int txpriority;
-	u8 tid = 0;
+	struct ieee80211_sta *sta = NULL;
+	struct ieee80211_hdr *wh = (struct ieee80211_hdr *)skb->data;
+	struct ieee80211_tx_info *tx_info = IEEE80211_SKB_CB(skb);
+	struct mwl_vif *mwl_vif = mwl_dev_get_vif(tx_info->control.vif);
 	struct mwl_ampdu_stream *stream = NULL;
-	bool start_ba_session = false;
-	bool mgmtframe = false;
-	struct ieee80211_mgmt *mgmt;
-	bool eapol_frame = false;
 	struct pcie_tx_ctrl *tx_ctrl;
+	/* Setup firmware control bit fields for each frame type. */
+	u8 xmitcontrol = 0;
+	u8 type = IEEE_TYPE_DATA;
+	u16 qos;
+	u8 ac = skb_get_queue_mapping(skb);
+	u8 tid = 0;
+	int txpriority;
+	u8 index = tx_info->hw_queue;
+	bool start_ba_session = false;
+	bool eapol_frame = false;
 	int rc;
+	u8 idx;
 
-	index = skb_get_queue_mapping(skb);
 	sta = control->sta;
 
-	wh = (struct ieee80211_hdr *)skb->data;
-	tx_info = IEEE80211_SKB_CB(skb);
-	mwl_vif = mwl_dev_get_vif(tx_info->control.vif);
-
-	if (ieee80211_is_data_qos(wh->frame_control))
+	if (ieee80211_is_data_qos(wh->frame_control) ||
+	    ieee80211_is_qos_nullfunc(wh->frame_control))
 		qos = le16_to_cpu(*((__le16 *)ieee80211_get_qos_ctl(wh)));
 	else
 		qos = 0;
 
-	if (ieee80211_is_mgmt(wh->frame_control)) {
-		mgmtframe = true;
-		mgmt = (struct ieee80211_mgmt *)skb->data;
-	} else {
-		u16 pkt_type;
-		struct mwl_sta *sta_info;
+	if (ieee80211_is_mgmt(wh->frame_control))
+		type = IEEE_TYPE_MANAGEMENT;
 
-		pkt_type = be16_to_cpu(*((__be16 *)
-			&skb->data[ieee80211_hdrlen(wh->frame_control) + 6]));
-		if (pkt_type == ETH_P_PAE) {
-			index = IEEE80211_AC_VO;
-			eapol_frame = true;
-		}
-		if (sta) {
-			if (mwl_vif->is_hw_crypto_enabled) {
-				sta_info = mwl_dev_get_sta(sta);
-				if (!sta_info->is_key_set && !eapol_frame) {
-					dev_kfree_skb_any(skb);
-					return;
-				}
-			}
-		}
+	if (ieee80211_is_any_nullfunc(wh->frame_control))
+		type = IEEE_TYPE_CONTROL;
+
+	if (skb->protocol == cpu_to_be16(ETH_P_PAE)) {
+		ac = IEEE80211_AC_VO;
+		eapol_frame = true;
 	}
+
+	index = txpriority = SYSADPT_TX_WMM_QUEUES - ac - 1;
 
 	if (tx_info->flags & IEEE80211_TX_CTL_ASSIGN_SEQ) {
 		wh->seq_ctrl &= cpu_to_le16(IEEE80211_SCTL_FRAG);
@@ -643,56 +626,23 @@ void pcie_8997_tx_xmit(struct ieee80211_hw *hw,
 		mwl_vif->seqno += 0x10;
 	}
 
-	/* Setup firmware control bit fields for each frame type. */
-	xmitcontrol = 0;
-
-	if (mgmtframe || ieee80211_is_ctl(wh->frame_control)) {
-		qos = 0;
-	} else if (ieee80211_is_data(wh->frame_control)) {
-		qos &= ~IEEE80211_QOS_CTL_ACK_POLICY_MASK;
-
+	if (ieee80211_is_data(wh->frame_control)) {
 		if (tx_info->flags & IEEE80211_TX_CTL_AMPDU) {
-			xmitcontrol &= ~EAGLE_TXD_XMITCTRL_ENABLE_AMPDU;
+			xmitcontrol = EAGLE_TXD_XMITCTRL_ENABLE_AMPDU;
 			qos |= IEEE80211_QOS_CTL_ACK_POLICY_BLOCKACK;
 		} else {
-			xmitcontrol |= EAGLE_TXD_XMITCTRL_ENABLE_AMPDU;
-			qos |= IEEE80211_QOS_CTL_ACK_POLICY_NORMAL;
-		}
-
-		if (is_multicast_ether_addr(ieee80211_get_DA(wh)) ||
-		  is_broadcast_ether_addr(ieee80211_get_DA(wh)) ||
-		  eapol_frame ||
-		  tx_info->flags & IEEE80211_TX_CTL_USE_MINRATE)
-			xmitcontrol |= EAGLE_TXD_XMITCTRL_USE_MC_RATE;
-	}
-
-	/* Queue ADDBA request in the respective data queue.  While setting up
-	 * the ampdu stream, mac80211 queues further packets for that
-	 * particular ra/tid pair.  However, packets piled up in the hardware
-	 * for that ra/tid pair will still go out. ADDBA request and the
-	 * related data packets going out from different queues asynchronously
-	 * will cause a shift in the receiver window which might result in
-	 * ampdu packets getting dropped at the receiver after the stream has
-	 * been setup.
-	 */
-	if (mgmtframe) {
-		u16 capab;
-
-		if (unlikely(ieee80211_is_action(wh->frame_control) &&
-			     mgmt->u.action.category == WLAN_CATEGORY_BACK &&
-			     mgmt->u.action.u.addba_req.action_code ==
-			     WLAN_ACTION_ADDBA_REQ)) {
-			capab = le16_to_cpu(mgmt->u.action.u.addba_req.capab);
-			tid = (capab & IEEE80211_ADDBA_PARAM_TID_MASK) >> 2;
-			index = utils_tid_to_ac(tid);
+			xmitcontrol = EAGLE_TXD_XMITCTRL_DISABLE_AMPDU;
 		}
 
 		if (unlikely(ieee80211_is_assoc_req(wh->frame_control)))
 			utils_add_basic_rates(hw->conf.chandef.chan->band, skb);
 	}
 
-	index = SYSADPT_TX_WMM_QUEUES - index - 1;
-	txpriority = index;
+	if (is_multicast_ether_addr(ieee80211_get_DA(wh)) ||
+	  is_broadcast_ether_addr(ieee80211_get_DA(wh)) ||
+	  eapol_frame ||
+	  tx_info->flags & IEEE80211_TX_CTL_USE_MINRATE)
+		xmitcontrol |= EAGLE_TXD_XMITCTRL_USE_MC_RATE;
 
 	if (sta && sta->ht_cap.ht_supported &&
 	  !(xmitcontrol & EAGLE_TXD_XMITCTRL_USE_MC_RATE) &&
@@ -701,48 +651,25 @@ void pcie_8997_tx_xmit(struct ieee80211_hw *hw,
 		pcie_tx_count_packet(sta, tid);
 
 		spin_lock_bh(&priv->stream_lock);
-		stream = mwl_fwcmd_lookup_stream(hw, sta, tid);
+
+		for (idx = 0; idx < priv->ampdu_num; idx++) {
+			stream = &priv->ampdu[idx];
+			if (stream->state == AMPDU_NO_STREAM)
+				continue;
+
+			if ((stream->sta == sta) && (stream->tid == tid))
+				goto stream_found;
+		}
+
+		goto no_stream;
 
 		if (stream) {
-			if (stream->state == AMPDU_STREAM_ACTIVE) {
-				if (WARN_ON(!(qos &
-					    IEEE80211_QOS_CTL_ACK_POLICY_BLOCKACK))) {
-					spin_unlock_bh(&priv->stream_lock);
-					dev_kfree_skb_any(skb);
-					return;
-				}
-
-				txpriority =
-					(SYSADPT_TX_WMM_QUEUES + stream->idx) %
-					TOTAL_HW_QUEUES;
-			} else if (stream->state == AMPDU_STREAM_NEW) {
-				/* We get here if the driver sends us packets
-				 * after we've initiated a stream, but before
-				 * our ampdu_action routine has been called
-				 * with IEEE80211_AMPDU_TX_START to get the SSN
-				 * for the ADDBA request.  So this packet can
-				 * go out with no risk of sequence number
-				 * mismatch.  No special handling is required.
-				 */
-			} else {
-				/* Drop packets that would go out after the
-				 * ADDBA request was sent but before the ADDBA
-				 * response is received.  If we don't do this,
-				 * the recipient would probably receive it
-				 * after the ADDBA request with SSN 0.  This
-				 * will cause the recipient's BA receive window
-				 * to shift, which would cause the subsequent
-				 * packets in the BA stream to be discarded.
-				 * mac80211 queues our packets for us in this
-				 * case, so this is really just a safety check.
-				 */
-				wiphy_warn(hw->wiphy,
-					   "can't send packet during ADDBA\n");
-				spin_unlock_bh(&priv->stream_lock);
-				dev_kfree_skb_any(skb);
-				return;
-			}
-		} else {
+stream_found:
+			if (stream->state == AMPDU_STREAM_ACTIVE)
+				txpriority = (SYSADPT_TX_WMM_QUEUES + stream->idx) % TOTAL_HW_QUEUES;
+		}
+		else {
+no_stream:
 			if (mwl_fwcmd_ampdu_allowed(sta, tid)) {
 				stream = mwl_fwcmd_add_stream(hw, sta, tid);
 
@@ -754,18 +681,17 @@ void pcie_8997_tx_xmit(struct ieee80211_hw *hw,
 		spin_unlock_bh(&priv->stream_lock);
 	} else {
 		qos &= ~IEEE80211_QOS_CTL_ACK_POLICY_MASK;
-		qos |= IEEE80211_QOS_CTL_ACK_POLICY_NORMAL;
 	}
 
 	tx_ctrl = (struct pcie_tx_ctrl *)tx_info->driver_data;
 	tx_ctrl->sta = (void *)sta;
 	tx_ctrl->tx_priority = txpriority;
-	tx_ctrl->type = (mgmtframe ? IEEE_TYPE_MANAGEMENT : IEEE_TYPE_DATA);
+	tx_ctrl->type = type;
 	tx_ctrl->qos_ctrl = qos;
 	tx_ctrl->xmit_control = xmitcontrol;
 
 	if (skb_queue_len(&pcie_priv->txq[index]) > pcie_priv->txq_limit)
-		ieee80211_stop_queue(hw, SYSADPT_TX_WMM_QUEUES - index - 1);
+		ieee80211_stop_queue(hw, ac);
 
 	skb_queue_tail(&pcie_priv->txq[index], skb);
 
