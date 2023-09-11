@@ -2805,9 +2805,9 @@ int mwl_fwcmd_destroy_ba(struct ieee80211_hw *hw,
 }
 
 /* caller must hold priv->stream_lock when calling the stream functions */
-struct mwl_ampdu_stream *mwl_fwcmd_add_stream(struct ieee80211_hw *hw,
-					      struct ieee80211_sta *sta,
-					      u8 tid)
+inline struct mwl_ampdu_stream *mwl_fwcmd_add_stream(struct ieee80211_hw *hw,
+						     struct ieee80211_sta *sta,
+						     u8 tid)
 {
 	struct mwl_priv *priv = hw->priv;
 	struct mwl_ampdu_stream *stream;
@@ -2900,8 +2900,8 @@ void mwl_fwcmd_del_sta_streams(struct ieee80211_hw *hw,
 	spin_unlock_bh(&priv->stream_lock);
 }
 
-int mwl_fwcmd_start_stream(struct ieee80211_hw *hw,
-			   struct mwl_ampdu_stream *stream)
+inline int mwl_fwcmd_start_stream(struct ieee80211_hw *hw,
+				  struct mwl_ampdu_stream *stream)
 {
 	/* if the stream has already been started, don't start it again */
 	if (stream->state != AMPDU_STREAM_NEW)
@@ -2910,15 +2910,15 @@ int mwl_fwcmd_start_stream(struct ieee80211_hw *hw,
 	return ieee80211_start_tx_ba_session(stream->sta, stream->tid, 0);
 }
 
-void mwl_fwcmd_remove_stream(struct ieee80211_hw *hw,
+inline void mwl_fwcmd_remove_stream(struct ieee80211_hw *hw,
 			     struct mwl_ampdu_stream *stream)
 {
 	memset(stream, 0, sizeof(*stream));
 }
 
-struct mwl_ampdu_stream *mwl_fwcmd_lookup_stream(struct ieee80211_hw *hw,
-						 struct ieee80211_sta *sta,
-						 u8 tid)
+inline struct mwl_ampdu_stream *mwl_fwcmd_lookup_stream(struct ieee80211_hw *hw,
+							struct ieee80211_sta *sta,
+							u8 tid)
 {
 	struct mwl_priv *priv = hw->priv;
 	struct mwl_ampdu_stream *stream;
@@ -2943,7 +2943,7 @@ struct mwl_ampdu_stream *mwl_fwcmd_lookup_stream(struct ieee80211_hw *hw,
 	return NULL;
 }
 
-bool mwl_fwcmd_ampdu_allowed(struct ieee80211_sta *sta, u8 tid)
+inline bool mwl_fwcmd_ampdu_allowed(struct ieee80211_sta *sta, u8 tid)
 {
 	struct mwl_sta *sta_info;
 	struct mwl_tx_info *tx_stats;
@@ -3814,7 +3814,7 @@ int mwl_fwcmd_mcast_cts(struct ieee80211_hw *hw, u8 enable)
 	return 0;
 }
 
-void mwl_fwcmd_get_survey(struct ieee80211_hw *hw, int idx)
+inline void mwl_fwcmd_get_survey(struct ieee80211_hw *hw, int idx)
 {
 	struct mwl_priv *priv = hw->priv;
 	struct ieee80211_conf *conf = &hw->conf;
