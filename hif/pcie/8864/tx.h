@@ -15,24 +15,20 @@
 
 /* Description:  This file defines transmit related functions. */
 
-#ifndef _TX_H_
-#define _TX_H_
+#ifndef _8864_TX_H_
+#define _8864_TX_H_
 
-int pcie_tx_init(struct ieee80211_hw *hw);
-void pcie_tx_deinit(struct ieee80211_hw *hw);
-void pcie_tx_skbs(unsigned long data);
-void pcie_tx_done(unsigned long data);
-void pcie_tx_flush_amsdu(unsigned long data);
-void pcie_tx_xmit(struct ieee80211_hw *hw,
+int pcie_8864_tx_init(struct ieee80211_hw *hw);
+void pcie_8864_tx_deinit(struct ieee80211_hw *hw);
+void pcie_8864_tx_skbs(unsigned long data);
+void pcie_8864_tx_done(unsigned long data);
+void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
 		  struct ieee80211_tx_control *control,
 		  struct sk_buff *skb);
-void pcie_tx_del_pkts_via_vif(struct ieee80211_hw *hw,
+void pcie_8864_tx_del_pkts_via_vif(struct ieee80211_hw *hw,
 			      struct ieee80211_vif *vif);
-void pcie_tx_del_pkts_via_sta(struct ieee80211_hw *hw,
+void pcie_8864_tx_del_pkts_via_sta(struct ieee80211_hw *hw,
 			      struct ieee80211_sta *sta);
-void pcie_tx_del_ampdu_pkts(struct ieee80211_hw *hw,
+void pcie_8864_tx_del_ampdu_pkts(struct ieee80211_hw *hw,
 			    struct ieee80211_sta *sta, u8 desc_num);
-void pcie_tx_del_sta_amsdu_pkts(struct ieee80211_hw *hw,
-				struct ieee80211_sta *sta);
-
-#endif /* _TX_H_ */
+#endif /* _8864_TX_H_ */

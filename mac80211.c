@@ -129,9 +129,11 @@ static int mwl_mac80211_start(struct ieee80211_hw *hw)
 	rc = mwl_fwcmd_set_dwds_stamode(hw, true);
 	if (rc)
 		goto fwcmd_fail;
-	rc = mwl_fwcmd_set_fw_flush_timer(hw, SYSADPT_AMSDU_FLUSH_TIME);
-	if (rc)
-		goto fwcmd_fail;
+	if (priv->chip_type != MWL8864) {
+		rc = mwl_fwcmd_set_fw_flush_timer(hw, SYSADPT_AMSDU_FLUSH_TIME);
+		if (rc)
+			goto fwcmd_fail;
+	}
 	rc = mwl_fwcmd_set_optimization_level(hw, 1);
 	if (rc)
 		goto fwcmd_fail;
