@@ -23,6 +23,7 @@
 #include "utils.h"
 #include "thermal.h"
 #include "hif/fwcmd.h"
+#include "hif/pcie/dev.h"
 #include "hif/hif-ops.h"
 #include "debugfs.h"
 
@@ -331,14 +332,58 @@ static ssize_t mwl_debugfs_info_read(struct file *file, char __user *ubuf,
 {
 	struct mwl_priv *priv = (struct mwl_priv *)file->private_data;
 	unsigned long page = get_zeroed_page(GFP_KERNEL);
+	struct pcie_priv *pcie_priv = priv->hif.priv;
+	unsigned long flags;
 	int tx_num = 4, rx_num = 4;
 	char *p = (char *)page;
 	int len = 0, size = PAGE_SIZE;
 	ssize_t ret;
+	const struct hostcmd_get_hw_spec *get_hw_spec;
+	int i;
+	struct pcie_txq * pcie_txq;
 
 	if (!p)
 		return -ENOMEM;
 
+	/* get and prepare HW specifications */
+	get_hw_spec = mwl_fwcmd_get_hw_specs(priv->hw);
+	if (!get_hw_spec) {
+		wiphy_err(priv->hw->wiphy, "fail to get HW specifications\n");
+		goto err_get_hw_specs;
+	}
+	len += scnprintf(p + len, size - len,
+			 "host_if: %d\n", get_hw_spec->host_if);
+	len += scnprintf(p + len, size - len,
+			 "num_antenna: %d\n", le16_to_cpu(get_hw_spec->num_antenna));
+	len += scnprintf(p + len, size - len,
+			 "region_code: %d\n", le16_to_cpu(get_hw_spec->region_code));
+	len += scnprintf(p + len, size - len,
+			 "num_wcb: %d\n", le32_to_cpu(get_hw_spec->num_wcb));
+
+	if (priv->chip_type == MWL8864) {
+		len += scnprintf(p + len, size - len,
+			 "-----------------------=>  address| address|qlen|fw_desc_cnt\n");
+		pcie_txq = &pcie_priv->pcie_txq[0];
+		spin_lock_irqsave(&pcie_txq->tx_desc_lock, flags);
+		len += scnprintf(p + len, size - len,
+				"wcb_base0   : %x => %8x|%8p|%4d|%d\n", get_hw_spec->wcb_base0, *((unsigned int *)le32_to_cpu(get_hw_spec->wcb_base0)),(void *)*((unsigned int *)le32_to_cpu(get_hw_spec->wcb_base0)),skb_queue_len(&pcie_txq->txq_buffer),pcie_txq->fw_desc_cnt);
+		spin_unlock_irqrestore(&pcie_txq->tx_desc_lock, flags);
+		for(i = 0; i < SYSADPT_TOTAL_TX_QUEUES - 1; i++) {
+			pcie_txq = &pcie_priv->pcie_txq[i + 1];
+			spin_lock_irqsave(&pcie_txq->tx_desc_lock, flags);
+			len += scnprintf(p + len, size - len,
+				"wcb_base[%2d]: %x => %8x|%8p|%4d|%d\n", i, get_hw_spec->wcb_base[i], *((unsigned int *)le32_to_cpu(get_hw_spec->wcb_base[i])),(void *)*((unsigned int *)le32_to_cpu(get_hw_spec->wcb_base[i])),skb_queue_len(&pcie_txq->txq_buffer),pcie_txq->fw_desc_cnt);
+			spin_unlock_irqrestore(&pcie_txq->tx_desc_lock, flags);
+		}
+	}
+
+	len += scnprintf(p + len, size - len,
+			 "num_mcast_addr: %X\n", le16_to_cpu(get_hw_spec->num_mcast_addr));
+	len += scnprintf(p + len, size - len,
+			 "permanent mac address: %pM\n", get_hw_spec->permanent_addr);
+	len += scnprintf(p + len, size - len,
+			 "fw_awake_cookie: %d\n", le32_to_cpu(get_hw_spec->fw_awake_cookie));
+err_get_hw_specs:
 	len += scnprintf(p + len, size - len,
 			 "driver name: %s\n",
 			 mwl_hif_get_driver_name(priv->hw));

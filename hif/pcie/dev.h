@@ -217,6 +217,9 @@ struct pcie_desc_data {
 	u32 rx_desc_write;                 /* FW descriptor write position    */
 	u32 rx_desc_read;                  /* FW descriptor read position     */
 	u32 rx_buf_size;                   /* length of the RX buffers        */
+
+	struct ieee80211_tx_rate	rates[4];	/* number of multi-rate stages */
+
 };
 
 /* DMA header used by firmware and hardware. */
@@ -571,6 +574,44 @@ struct pcie_pfu_dma_data {
 	struct pcie_dma_data dma_data;
 } __packed;
 
+/**
+ * struct pcie_txq - Transmit queue state
+ * @qnum: Hardware q number
+ * @link: Link ptr in last TX desc
+ * @q: Transmit queue (&struct list_head)
+ * @tx_desc_lock: Lock on q and link
+ * @setup: Is the queue configured
+ * @txq_len:Number of queued buffers
+ * @txq_max: Max allowed num of queued buffers
+ * @txq_poll_mark: Used to check if queue got stuck
+ * @txq_stuck: Queue stuck counter
+ * @fw_desc_cnt: number being processed on the arm side
+ *
+ * One of these exists for each hardware transmit queue.
+ * Packets sent to us from above are assigned to queues based
+ * on their priority.  Not all devices support a complete set
+ * of hardware transmit queues. For those devices the array
+ * sc_ac2q will map multiple priorities to fewer hardware queues
+ * (typically all to one hardware queue).
+ */
+struct pcie_txq {
+	unsigned int		qnum;
+	struct sk_buff_head	txq_buffer;
+	/* number of descriptors owned by fw at any one time */
+	int			fw_desc_cnt;
+
+	/* various descriptor data */
+	/* for tx descriptor data  */
+	spinlock_t		tx_desc_lock ____cacheline_aligned_in_smp;
+	struct			pcie_desc_data desc_data;
+	bool			is_tx_schedule;
+	bool			is_tx_done_schedule;
+	struct mwl_priv*	mwl_priv;
+	struct pcie_priv*	pcie_priv;
+	struct tasklet_struct	tx_task;
+	struct tasklet_struct	tx_done_task;
+};
+
 struct pcie_priv {
 	struct mwl_priv *mwl_priv;
 	struct pci_dev *pdev;
@@ -578,6 +619,7 @@ struct pcie_priv {
 	void __iomem *iobase1; /* MEM Base Address Register 1  */
 	u32 next_bar_num;
 
+	struct pcie_txq pcie_txq[PCIE_NUM_OF_DESC_DATA];
 	struct sk_buff_head txq[PCIE_NUM_OF_DESC_DATA];
 
 	spinlock_t int_mask_lock ____cacheline_aligned_in_smp;
@@ -601,7 +643,6 @@ struct pcie_priv {
 	spinlock_t tx_desc_lock ____cacheline_aligned_in_smp;
 	struct pcie_desc_data desc_data[PCIE_NUM_OF_DESC_DATA];
 	/* number of descriptors owned by fw at any one time */
-	int fw_desc_cnt[PCIE_NUM_OF_DESC_DATA];
 
 	/* new data path */
 	struct pcie_desc_data_ndp desc_data_ndp;
