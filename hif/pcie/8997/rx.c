@@ -336,7 +336,7 @@ static inline int pcie_rx_refill(struct mwl_priv *priv,
 			     rx_hndl->psk_buff->data,
 			     desc->rx_buf_size,
 			     PCI_DMA_FROMDEVICE);
-	if (pci_dma_mapping_error(pcie_priv->pdev, dma)) {
+	if (unlikely(pci_dma_mapping_error(pcie_priv->pdev, dma))) {
 		dev_kfree_skb_any(rx_hndl->psk_buff);
 		wiphy_err(priv->hw->wiphy,
 			  "failed to map pci memory!\n");
@@ -397,7 +397,7 @@ void pcie_8997_rx_recv(unsigned long data)
 	desc = &pcie_priv->desc_data[0];
 	curr_hndl = desc->pnext_rx_hndl;
 
-	if (!curr_hndl) {
+	if (unlikely(!curr_hndl)) {
 		pcie_mask_int(pcie_priv, MACREG_A2HRIC_BIT_RX_RDY, true);
 		pcie_priv->is_rx_schedule = false;
 		wiphy_warn(hw->wiphy, "busy or no receiving packets\n");
@@ -406,7 +406,7 @@ void pcie_8997_rx_recv(unsigned long data)
 
 	while (curr_hndl->pdesc->rx_control == EAGLE_RXD_CTRL_DMA_OWN) {
 		prx_skb = curr_hndl->psk_buff;
-		if (!prx_skb)
+		if (unlikely(!prx_skb))
 			goto out;
 		pci_unmap_single(pcie_priv->pdev,
 				 le32_to_cpu(curr_hndl->pdesc->pphys_buff_data),
@@ -414,7 +414,7 @@ void pcie_8997_rx_recv(unsigned long data)
 				 PCI_DMA_FROMDEVICE);
 		pkt_len = le16_to_cpu(curr_hndl->pdesc->pkt_len);
 
-		if (skb_tailroom(prx_skb) < pkt_len) {
+		if (unlikely(skb_tailroom(prx_skb) < pkt_len)) {
 			dev_kfree_skb_any(prx_skb);
 			goto out;
 		}
@@ -447,7 +447,7 @@ void pcie_8997_rx_recv(unsigned long data)
 			* 0 for triggering Counter
 			* Measure of MMIC failure.
 			*/
-			if (status->flag & RX_FLAG_MMIC_ERROR) {
+		if (unlikely(status->flag & RX_FLAG_MMIC_ERROR)) {
 				struct pcie_dma_data *dma_data;
 
 				dma_data = (struct pcie_dma_data *)
