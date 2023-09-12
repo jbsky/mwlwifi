@@ -340,7 +340,7 @@ static inline int pcie_rx_refill(struct pcie_txq *pcie_txq0,
 			     rx_hndl->psk_buff->data,
 			     desc->rx_buf_size,
 			     PCI_DMA_FROMDEVICE);
-	if (pci_dma_mapping_error(pcie_priv->pdev, dma)) {
+	if (unlikely(pci_dma_mapping_error(pcie_priv->pdev, dma))) {
 		dev_kfree_skb_any(rx_hndl->psk_buff);
 		wiphy_err(pcie_txq0->mwl_priv->hw->wiphy,
 			  "failed to map pci memory!\n");
@@ -398,7 +398,7 @@ void pcie_8864_rx_recv(struct pcie_txq *pcie_txq0)
 	u8 *qc;
 	const u8 eapol[] = {0x88, 0x8e};
 
-	if (!curr_hndl) {
+	if (unlikely(!curr_hndl)) {
 		pcie_mask_int(pcie_priv, MACREG_A2HRIC_BIT_RX_RDY, true);
 		pcie_priv->is_rx_schedule = false;
 		wiphy_warn(hw->wiphy, "busy or no receiving packets\n");
@@ -407,7 +407,7 @@ void pcie_8864_rx_recv(struct pcie_txq *pcie_txq0)
 
 	while (curr_hndl->pdesc->rx_control == EAGLE_RXD_CTRL_DMA_OWN) {
 		prx_skb = curr_hndl->psk_buff;
-		if (!prx_skb)
+		if (unlikely(!prx_skb))
 			goto out;
 		pci_unmap_single(pcie_priv->pdev,
 				 le32_to_cpu(curr_hndl->pdesc->pphys_buff_data),
@@ -415,7 +415,7 @@ void pcie_8864_rx_recv(struct pcie_txq *pcie_txq0)
 				 PCI_DMA_FROMDEVICE);
 		pkt_len = le16_to_cpu(curr_hndl->pdesc->pkt_len);
 
-		if (skb_tailroom(prx_skb) < pkt_len) {
+		if (unlikely(skb_tailroom(prx_skb) < pkt_len)) {
 			dev_kfree_skb_any(prx_skb);
 			goto out;
 		}
@@ -446,7 +446,7 @@ void pcie_8864_rx_recv(struct pcie_txq *pcie_txq0)
 			* 0 for triggering Counter
 			* Measure of MMIC failure.
 			*/
-			if (status->flag & RX_FLAG_MMIC_ERROR) {
+		if (unlikely(status->flag & RX_FLAG_MMIC_ERROR)) {
 				struct pcie_dma_data *dma_data;
 
 				dma_data = (struct pcie_dma_data *)
