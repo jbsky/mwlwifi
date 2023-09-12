@@ -432,9 +432,6 @@ void pcie_8997_rx_recv(unsigned long data)
 		if (priv->noise > 0)
 			priv->noise = -priv->noise;
 
-		wh = &((struct pcie_dma_data *)prx_skb->data)->wh;
-
-		if (utils_is_crypted(wh)) {
 			/* When MMIC ERROR is encountered
 			* by the firmware, payload is
 			* dropped and only 32 bytes of
@@ -450,21 +447,19 @@ void pcie_8997_rx_recv(unsigned long data)
 		if (unlikely(status->flag & RX_FLAG_MMIC_ERROR)) {
 				struct pcie_dma_data *dma_data;
 
-				dma_data = (struct pcie_dma_data *)
-				     prx_skb->data;
+			dma_data = (struct pcie_dma_data *) prx_skb->data;
 				memset((void *)&dma_data->data, 0, 4);
 				pkt_len += 4;
 			}
-
-			status->flag |=
-				RX_FLAG_DECRYPTED |
-				RX_FLAG_MMIC_STRIPPED;
-		}
 
 		skb_put(prx_skb, pkt_len);
 		pcie_rx_remove_dma_header(prx_skb, curr_hndl->pdesc->qos_ctrl);
 
 		wh = (struct ieee80211_hdr *)prx_skb->data;
+
+		if (utils_is_crypted(wh)) {
+			status->flag |= RX_FLAG_DECRYPTED | RX_FLAG_MMIC_STRIPPED;
+		}
 
 		if (ieee80211_is_data_qos(wh->frame_control)) {
 			qc = ieee80211_get_qos_ctl(wh);
