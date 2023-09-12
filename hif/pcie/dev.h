@@ -217,6 +217,9 @@ struct pcie_desc_data {
 	u32 rx_desc_write;                 /* FW descriptor write position    */
 	u32 rx_desc_read;                  /* FW descriptor read position     */
 	u32 rx_buf_size;                   /* length of the RX buffers        */
+
+	struct ieee80211_tx_rate rates[4]; /* TODO                            */
+
 };
 
 /* DMA header used by firmware and hardware. */
@@ -571,6 +574,36 @@ struct pcie_pfu_dma_data {
 	struct pcie_dma_data dma_data;
 } __packed;
 
+/**
+ * struct pcie_txq - Transmit queue state
+ * @qnum: Hardware queue number
+ * @txq_buffer: Transmit queue (&struct list_head)
+ * @fw_desc_cnt: number being processed on the arm side
+ * @tx_desc_lock: Lock on descriptor
+ * @desc_data: descriptor for this txq
+ * @is_tx_schedule: test if tx_task is not already scheduled
+ * tx -> DMA
+ * @is_tx_done_schedule: test if tx_done_task is not already scheduled
+ * DMA -> done
+ */
+struct pcie_txq {
+	unsigned int		qnum;
+	struct sk_buff_head	txq_buffer;
+	/* number of descriptors owned by fw at any one time */
+	int			fw_desc_cnt;
+
+	/* various descriptor data */
+	/* for tx descriptor data  */
+	spinlock_t		tx_desc_lock ____cacheline_aligned_in_smp;
+	struct			pcie_desc_data desc_data;
+	bool			is_tx_schedule;
+	bool			is_tx_done_schedule;
+	struct mwl_priv*	mwl_priv;
+	struct pcie_priv*	pcie_priv;
+	struct tasklet_struct	tx_task;
+	struct tasklet_struct	tx_done_task;
+};
+
 struct pcie_priv {
 	struct mwl_priv *mwl_priv;
 	struct pci_dev *pdev;
@@ -578,6 +611,7 @@ struct pcie_priv {
 	void __iomem *iobase1; /* MEM Base Address Register 1  */
 	u32 next_bar_num;
 
+	struct pcie_txq pcie_txq[PCIE_NUM_OF_DESC_DATA];
 	struct sk_buff_head txq[PCIE_NUM_OF_DESC_DATA];
 
 	spinlock_t int_mask_lock ____cacheline_aligned_in_smp;
@@ -597,7 +631,6 @@ struct pcie_priv {
 	spinlock_t tx_desc_lock ____cacheline_aligned_in_smp;
 	struct pcie_desc_data desc_data[PCIE_NUM_OF_DESC_DATA];
 	/* number of descriptors owned by fw at any one time */
-	int fw_desc_cnt[PCIE_NUM_OF_DESC_DATA];
 
 	/* new data path */
 	struct pcie_desc_data_ndp desc_data_ndp;

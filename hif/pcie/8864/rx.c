@@ -42,8 +42,9 @@ static int pcie_rx_ring_alloc(struct mwl_priv *priv)
 {
 	struct pcie_priv *pcie_priv = priv->hif.priv;
 	struct pcie_desc_data *desc;
+	struct pcie_txq *pcie_txq = &pcie_priv->pcie_txq[0];
 
-	desc = &pcie_priv->desc_data[0];
+	desc = &pcie_txq->desc_data;
 
 	desc->prx_ring = (struct pcie_rx_desc *)
 		dma_alloc_coherent(priv->dev,
@@ -79,8 +80,9 @@ static int pcie_rx_ring_init(struct mwl_priv *priv)
 	struct pcie_rx_hndl *rx_hndl;
 	dma_addr_t dma;
 	u32 val;
+	struct pcie_txq *pcie_txq0 = &pcie_priv->pcie_txq[0];
 
-	desc = &pcie_priv->desc_data[0];
+	desc = &pcie_txq0->desc_data;
 
 	if (desc->prx_ring) {
 		desc->rx_buf_size = SYSADPT_MAX_AGGR_SIZE;
@@ -144,8 +146,9 @@ static void pcie_rx_ring_cleanup(struct mwl_priv *priv)
 	struct pcie_desc_data *desc;
 	int i;
 	struct pcie_rx_hndl *rx_hndl;
+	struct pcie_txq *pcie_txq0 = &pcie_priv->pcie_txq[0];
 
-	desc = &pcie_priv->desc_data[0];
+	desc = &pcie_txq0->desc_data;
 
 	if (desc->prx_ring) {
 		for (i = 0; i < PCIE_MAX_NUM_RX_DESC; i++) {
@@ -177,8 +180,9 @@ static void pcie_rx_ring_free(struct mwl_priv *priv)
 {
 	struct pcie_priv *pcie_priv = priv->hif.priv;
 	struct pcie_desc_data *desc;
+	struct pcie_txq *pcie_txq0 = &pcie_priv->pcie_txq[0];
 
-	desc = &pcie_priv->desc_data[0];
+	desc = &pcie_txq0->desc_data;
 
 	if (desc->prx_ring) {
 		pcie_rx_ring_cleanup(priv);
@@ -310,14 +314,14 @@ static inline bool pcie_rx_process_mesh_amsdu(struct mwl_priv *priv,
 	return true;
 }
 
-static inline int pcie_rx_refill(struct mwl_priv *priv,
+static inline int pcie_rx_refill(struct pcie_txq *pcie_txq0,
 				 struct pcie_rx_hndl *rx_hndl)
 {
-	struct pcie_priv *pcie_priv = priv->hif.priv;
+	struct pcie_priv *pcie_priv = pcie_txq0->pcie_priv;
 	struct pcie_desc_data *desc;
 	dma_addr_t dma;
 
-	desc = &pcie_priv->desc_data[0];
+	desc = &pcie_txq0->desc_data;
 
 	rx_hndl->psk_buff = dev_alloc_skb(desc->rx_buf_size);
 
@@ -338,7 +342,7 @@ static inline int pcie_rx_refill(struct mwl_priv *priv,
 			     PCI_DMA_FROMDEVICE);
 	if (pci_dma_mapping_error(pcie_priv->pdev, dma)) {
 		dev_kfree_skb_any(rx_hndl->psk_buff);
-		wiphy_err(priv->hw->wiphy,
+		wiphy_err(pcie_txq0->mwl_priv->hw->wiphy,
 			  "failed to map pci memory!\n");
 		return -ENOMEM;
 	}
@@ -378,13 +382,13 @@ void pcie_8864_rx_deinit(struct ieee80211_hw *hw)
 	pcie_rx_ring_free(priv);
 }
 
-void pcie_8864_rx_recv(unsigned long data)
+void pcie_8864_rx_recv(struct pcie_txq *pcie_txq0)
 {
-	struct ieee80211_hw *hw = (struct ieee80211_hw *)data;
-	struct mwl_priv *priv = hw->priv;
-	struct pcie_priv *pcie_priv = priv->hif.priv;
-	struct pcie_desc_data *desc;
-	struct pcie_rx_hndl *curr_hndl;
+	struct mwl_priv *priv = pcie_txq0->mwl_priv;
+	struct ieee80211_hw *hw = priv->hw;
+	struct pcie_priv *pcie_priv = pcie_txq0->pcie_priv;
+	struct pcie_desc_data *desc = &pcie_txq0->desc_data;
+	struct pcie_rx_hndl *curr_hndl = desc->pnext_rx_hndl;
 	struct sk_buff *prx_skb = NULL;
 	int pkt_len;
 	struct ieee80211_rx_status *status;
@@ -392,9 +396,6 @@ void pcie_8864_rx_recv(unsigned long data)
 	u8 *_data;
 	u8 *qc;
 	const u8 eapol[] = {0x88, 0x8e};
-
-	desc = &pcie_priv->desc_data[0];
-	curr_hndl = desc->pnext_rx_hndl;
 
 	if (!curr_hndl) {
 		pcie_mask_int(pcie_priv, MACREG_A2HRIC_BIT_RX_RDY, true);
@@ -480,7 +481,7 @@ void pcie_8864_rx_recv(unsigned long data)
 
 		ieee80211_rx(hw, prx_skb);
 out:
-		pcie_rx_refill(priv, curr_hndl);
+		pcie_rx_refill(pcie_txq0, curr_hndl);
 		curr_hndl->pdesc->rx_control = EAGLE_RXD_CTRL_DRIVER_OWN;
 		curr_hndl->pdesc->qos_ctrl = 0;
 		curr_hndl = curr_hndl->pnext;

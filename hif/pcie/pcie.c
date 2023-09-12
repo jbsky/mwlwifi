@@ -295,21 +295,25 @@ static int pcie_init_8864(struct ieee80211_hw *hw)
 {
 	struct mwl_priv *priv = hw->priv;
 	struct pcie_priv *pcie_priv = priv->hif.priv;
+	struct pcie_txq *pcie_txq;
+	struct pcie_txq *pcie_txq0 = &pcie_priv->pcie_txq[0];
 	const struct hostcmd_get_hw_spec *get_hw_spec;
 	struct hostcmd_set_hw_spec set_hw_spec;
 	int rc, i;
 
 	spin_lock_init(&pcie_priv->int_mask_lock);
-	tasklet_init(&pcie_priv->tx_task, (void *)pcie_8864_tx_skbs, (unsigned long)hw);
-	tasklet_disable(&pcie_priv->tx_task);
-	tasklet_init(&pcie_priv->tx_done_task, (void *)pcie_8864_tx_done, (unsigned long)hw);
-	tasklet_disable(&pcie_priv->tx_done_task);
-	spin_lock_init(&pcie_priv->tx_desc_lock);
-	tasklet_init(&pcie_priv->rx_task, (void *)pcie_8864_rx_recv, (unsigned long)hw);
+	for (i = 0; i < SYSADPT_TOTAL_TX_QUEUES; i++) {
+		pcie_txq = &pcie_priv->pcie_txq[i];
+		tasklet_init(&pcie_txq->tx_task, (void *)pcie_8864_tx_skbs, (unsigned long)pcie_txq);
+		tasklet_disable(&pcie_txq->tx_task);
+		tasklet_init(&pcie_txq->tx_done_task, (void *)pcie_8864_tx_done, (unsigned long)pcie_txq);
+		tasklet_disable(&pcie_txq->tx_done_task);
+		spin_lock_init(&pcie_txq->tx_desc_lock);
+	}
+	tasklet_init(&pcie_priv->rx_task, (void *)pcie_8864_rx_recv, (unsigned long)pcie_txq0);
 	tasklet_disable(&pcie_priv->rx_task);
 	pcie_priv->txq_limit = PCIE_TX_QUEUE_LIMIT;
 	pcie_priv->txq_wake_threshold = PCIE_TX_WAKE_Q_THRESHOLD;
-	pcie_priv->is_tx_done_schedule = false;
 	pcie_priv->recv_limit = PCIE_RECEIVE_LIMIT;
 	pcie_priv->is_rx_schedule = false;
 
@@ -333,34 +337,41 @@ static int pcie_init_8864(struct ieee80211_hw *hw)
 		goto err_get_hw_specs;
 	}
 	ether_addr_copy(&priv->hw_data.mac_addr[0], get_hw_spec->permanent_addr);
-	pcie_priv->desc_data[0].wcb_base = le32_to_cpu(get_hw_spec->wcb_base0) & 0x0000ffff;
+	pcie_txq0->desc_data.wcb_base = le32_to_cpu(get_hw_spec->wcb_base0) & 0x0000ffff;
+	for (i = 1; i < SYSADPT_TOTAL_TX_QUEUES; i++) {
+		pcie_txq = &pcie_priv->pcie_txq[i];
+		pcie_txq->desc_data.wcb_base = le32_to_cpu(get_hw_spec->wcb_base[i - 1]) & 0x0000ffff;
+	}
 
-	for (i = 1; i < SYSADPT_TOTAL_TX_QUEUES; i++)
-		pcie_priv->desc_data[i].wcb_base = le32_to_cpu(get_hw_spec->wcb_base[i - 1]) & 0x0000ffff;
-
-	pcie_priv->desc_data[0].rx_desc_read = le32_to_cpu(get_hw_spec->rxpd_rd_ptr) & 0x0000ffff;
-	pcie_priv->desc_data[0].rx_desc_write = le32_to_cpu(get_hw_spec->rxpd_wr_ptr) & 0x0000ffff;
+	pcie_txq0->desc_data.rx_desc_read = le32_to_cpu(get_hw_spec->rxpd_rd_ptr) & 0x0000ffff;
+	pcie_txq0->desc_data.rx_desc_write = le32_to_cpu(get_hw_spec->rxpd_wr_ptr) & 0x0000ffff;
 	priv->hw_data.fw_release_num = le32_to_cpu(get_hw_spec->fw_release_num);
 	priv->hw_data.hw_version = get_hw_spec->version;
-	writel(pcie_priv->desc_data[0].pphys_tx_ring, pcie_priv->iobase0 + pcie_priv->desc_data[0].wcb_base);
-	for (i = 1; i < SYSADPT_TOTAL_TX_QUEUES; i++)
-		writel(pcie_priv->desc_data[i].pphys_tx_ring, pcie_priv->iobase0 + pcie_priv->desc_data[i].wcb_base);
-	writel(pcie_priv->desc_data[0].pphys_rx_ring, pcie_priv->iobase0 + pcie_priv->desc_data[0].rx_desc_read);
-	writel(pcie_priv->desc_data[0].pphys_rx_ring, pcie_priv->iobase0 + pcie_priv->desc_data[0].rx_desc_write);
+	writel(pcie_txq0->desc_data.pphys_tx_ring, pcie_priv->iobase0 + pcie_txq0->desc_data.wcb_base);
+	for (i = 1; i < SYSADPT_TOTAL_TX_QUEUES; i++) {
+		pcie_txq = &pcie_priv->pcie_txq[i];
+		writel(pcie_txq->desc_data.pphys_tx_ring, pcie_priv->iobase0 + pcie_txq->desc_data.wcb_base);
+	}
+
+	writel(pcie_txq0->desc_data.pphys_rx_ring, pcie_priv->iobase0 + pcie_txq0->desc_data.rx_desc_read);
+	writel(pcie_txq0->desc_data.pphys_rx_ring, pcie_priv->iobase0 + pcie_txq0->desc_data.rx_desc_write);
 
 	/* prepare and set HW specifications */
 	memset(&set_hw_spec, 0, sizeof(set_hw_spec));
 	set_hw_spec.wcb_base[0] =
-		cpu_to_le32(pcie_priv->desc_data[0].pphys_tx_ring);
-	for (i = 1; i < SYSADPT_TOTAL_TX_QUEUES; i++)
+		cpu_to_le32(pcie_txq0->desc_data.pphys_tx_ring);
+	for (i = 1; i < SYSADPT_TOTAL_TX_QUEUES; i++) {
+		pcie_txq = &pcie_priv->pcie_txq[i];
 		set_hw_spec.wcb_base[i] = cpu_to_le32(
-			pcie_priv->desc_data[i].pphys_tx_ring);
+			pcie_txq->desc_data.pphys_tx_ring);
+	}
+
 	set_hw_spec.tx_wcb_num_per_queue =
 			cpu_to_le32(PCIE_MAX_NUM_TX_DESC);
 	set_hw_spec.num_tx_queues = cpu_to_le32(PCIE_NUM_OF_DESC_DATA);
 	set_hw_spec.total_rx_wcb = cpu_to_le32(PCIE_MAX_NUM_RX_DESC);
 	set_hw_spec.rxpd_wr_ptr =
-		cpu_to_le32(pcie_priv->desc_data[0].pphys_rx_ring);
+		cpu_to_le32(pcie_txq0->desc_data.pphys_rx_ring);
 	rc = mwl_fwcmd_set_hw_specs(hw, &set_hw_spec);
 	if (rc) {
 		wiphy_err(hw->wiphy, "%s: fail to set HW specifications\n",
@@ -403,12 +414,17 @@ static void pcie_deinit_8864(struct ieee80211_hw *hw)
 {
 	struct mwl_priv *priv = hw->priv;
 	struct pcie_priv *pcie_priv = priv->hif.priv;
+	struct pcie_txq *pcie_txq;
+	int i;
 
 	pcie_8864_rx_deinit(hw);
 	pcie_8864_tx_deinit(hw);
 	tasklet_kill(&pcie_priv->rx_task);
-	tasklet_kill(&pcie_priv->tx_done_task);
-	tasklet_kill(&pcie_priv->tx_task);
+	for (i = 0; i < SYSADPT_TOTAL_TX_QUEUES; i++) {
+		pcie_txq = &pcie_priv->pcie_txq[i];
+		tasklet_kill(&pcie_txq->tx_done_task);
+		tasklet_kill(&pcie_txq->tx_task);
+	}
 	pcie_reset(hw);
 }
 
@@ -430,7 +446,23 @@ static int pcie_get_info(struct ieee80211_hw *hw, char *buf, size_t size)
 	return len;
 }
 
-static void pcie_enable_data_tasks(struct ieee80211_hw *hw)
+static void pcie_enable_data_tasks_8864(struct ieee80211_hw *hw)
+{
+	struct mwl_priv *priv = hw->priv;
+	struct pcie_priv *pcie_priv = priv->hif.priv;
+	struct pcie_txq *pcie_txq;
+	int i;
+
+	for (i = 0; i < SYSADPT_TOTAL_TX_QUEUES; i++) {
+		pcie_txq = &pcie_priv->pcie_txq[i];
+		tasklet_enable(&pcie_txq->tx_done_task);
+		tasklet_enable(&pcie_txq->tx_task);
+	}
+
+	tasklet_enable(&pcie_priv->rx_task);
+}
+
+static void pcie_enable_data_tasks_8997(struct ieee80211_hw *hw)
 {
 	struct mwl_priv *priv = hw->priv;
 	struct pcie_priv *pcie_priv = priv->hif.priv;
@@ -440,7 +472,23 @@ static void pcie_enable_data_tasks(struct ieee80211_hw *hw)
 	tasklet_enable(&pcie_priv->rx_task);
 }
 
-static void pcie_disable_data_tasks(struct ieee80211_hw *hw)
+static void pcie_disable_data_tasks_8864(struct ieee80211_hw *hw)
+{
+	struct mwl_priv *priv = hw->priv;
+	struct pcie_priv *pcie_priv = priv->hif.priv;
+	struct pcie_txq *pcie_txq;
+	int i;
+
+	for (i = 0; i < SYSADPT_TOTAL_TX_QUEUES; i++) {
+		pcie_txq = &pcie_priv->pcie_txq[i];
+		tasklet_disable(&pcie_txq->tx_done_task);
+		tasklet_disable(&pcie_txq->tx_task);
+	}
+
+	tasklet_disable(&pcie_priv->rx_task);
+}
+
+static void pcie_disable_data_tasks_8997(struct ieee80211_hw *hw)
 {
 	struct mwl_priv *priv = hw->priv;
 	struct pcie_priv *pcie_priv = priv->hif.priv;
@@ -517,14 +565,8 @@ static irqreturn_t pcie_isr_8864(struct ieee80211_hw *hw)
 		writel(~int_status,
 		       pcie_priv->iobase1 + MACREG_REG_A2H_INTERRUPT_CAUSE);
 
-		if (int_status & MACREG_A2HRIC_BIT_TX_DONE) {
-			if (!pcie_priv->is_tx_done_schedule) {
-				pcie_mask_int(pcie_priv,
-					      MACREG_A2HRIC_BIT_TX_DONE, false);
-				tasklet_schedule(&pcie_priv->tx_done_task);
-				pcie_priv->is_tx_done_schedule = true;
-			}
-		}
+		// true if non_pfu_tx_done done one a skb
+		// if (int_status & MACREG_A2HRIC_BIT_TX_DONE) if(priv->isr_debug) wiphy_debug(hw->wiphy, "int_status: %d => MACREG_A2HRIC_BIT_TX_DONE\n", int_status);
 
 		if (int_status & MACREG_A2HRIC_BIT_RX_RDY) {
 			if (!pcie_priv->is_rx_schedule) {
@@ -666,7 +708,16 @@ static void pcie_8997_tx_return_pkts(struct ieee80211_hw *hw)
 
 static void pcie_8864_tx_return_pkts(struct ieee80211_hw *hw)
 {
-	pcie_8864_tx_done((unsigned long)hw);
+	struct mwl_priv *priv = hw->priv;
+	struct pcie_priv *pcie_priv = priv->hif.priv;
+	struct pcie_txq *pcie_txq;
+	int i;
+
+	for (i = 0; i < PCIE_NUM_OF_DESC_DATA; i++) {
+		pcie_txq = &pcie_priv->pcie_txq[i];
+		if (pcie_txq->fw_desc_cnt)
+			pcie_8864_tx_done(pcie_txq);
+	}
 }
 
 static struct device_node *pcie_get_device_node(struct ieee80211_hw *hw)
@@ -766,8 +817,8 @@ static struct mwl_hif_ops pcie_hif_ops_8997 = {
 	.init                  = pcie_init_8997,
 	.deinit                = pcie_deinit_8997,
 	.get_info              = pcie_get_info,
-	.enable_data_tasks     = pcie_enable_data_tasks,
-	.disable_data_tasks    = pcie_disable_data_tasks,
+	.enable_data_tasks     = pcie_enable_data_tasks_8997,
+	.disable_data_tasks    = pcie_disable_data_tasks_8997,
 	.exec_cmd              = pcie_exec_cmd,
 	.get_irq_num           = pcie_get_irq_num,
 	.irq_handler           = pcie_isr_8997,
@@ -795,8 +846,8 @@ static struct mwl_hif_ops pcie_hif_ops_8864 = {
 	.init                  = pcie_init_8864,
 	.deinit                = pcie_deinit_8864,
 	.get_info              = pcie_get_info,
-	.enable_data_tasks     = pcie_enable_data_tasks,
-	.disable_data_tasks    = pcie_disable_data_tasks,
+	.enable_data_tasks     = pcie_enable_data_tasks_8864,
+	.disable_data_tasks    = pcie_disable_data_tasks_8864,
 	.exec_cmd              = pcie_exec_cmd,
 	.get_irq_num           = pcie_get_irq_num,
 	.irq_handler           = pcie_isr_8864,
