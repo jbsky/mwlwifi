@@ -599,7 +599,8 @@ void pcie_8997_tx_xmit(struct ieee80211_hw *hw,
 	int rc;
 	u8 idx;
 
-	sta = control->sta;
+	if (control)
+		sta = control->sta;
 
 	if (ieee80211_is_data_qos(wh->frame_control) ||
 	    ieee80211_is_qos_nullfunc(wh->frame_control))
@@ -631,9 +632,6 @@ void pcie_8997_tx_xmit(struct ieee80211_hw *hw,
 		} else {
 			xmitcontrol = EAGLE_TXD_XMITCTRL_DISABLE_AMPDU;
 		}
-
-		if (unlikely(ieee80211_is_assoc_req(wh->frame_control)))
-			utils_add_basic_rates(hw->conf.chandef.chan->band, skb);
 	}
 
 	if (is_multicast_ether_addr(ieee80211_get_DA(wh)) ||

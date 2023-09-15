@@ -238,6 +238,11 @@ struct mwl_priv {
 	bool disable_5g;
 	int antenna_tx;
 	int antenna_rx;
+
+	bool beaconing_started;
+	struct delayed_work beaconing;
+	unsigned long nexttbtt;	/* next beacon time in jiffies */
+
 	bool tx_amsdu;
 	bool dump_hostcmd;
 
@@ -421,6 +426,12 @@ struct mwl_vif {
 	bool set_beacon;
 	int basic_rate_idx;
 	u8 broadcast_ssid;
+
+	unsigned long bintval;   /* beacon interval time in µsec*/
+	unsigned long nexttbtt;	/* next beacon time in jiffies */
+
+	struct ieee80211_hw *hw;
+	struct ieee80211_vif *vif;
 };
 
 struct mwl_tx_info {

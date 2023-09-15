@@ -87,9 +87,9 @@ static void mwl_get_rateinfo(struct mwl_priv *priv, u8 *addr,
 	kfree(rate_table);
 }
 
-static void mwl_mac80211_tx(struct ieee80211_hw *hw,
-			    struct ieee80211_tx_control *control,
-			    struct sk_buff *skb)
+void mwl_mac80211_tx(struct ieee80211_hw *hw,
+		     struct ieee80211_tx_control *control,
+		     struct sk_buff *skb)
 {
 	struct mwl_priv *priv = hw->priv;
 
@@ -217,6 +217,10 @@ static int mwl_mac80211_add_interface(struct ieee80211_hw *hw,
 	mwl_vif->set_beacon = false;
 	mwl_vif->basic_rate_idx = 0;
 	mwl_vif->broadcast_ssid = 0xFF;
+	mwl_vif->vif = vif;
+	mwl_vif->hw = hw;
+	mwl_vif->nexttbtt = -1;
+	mwl_vif->bintval = 0;
 
 	switch (vif->type) {
 	case NL80211_IFTYPE_AP:
@@ -425,19 +429,43 @@ static void mwl_mac80211_bss_info_changed_ap(struct ieee80211_hw *hw,
 
 	if (changed & (BSS_CHANGED_BEACON_INT | BSS_CHANGED_BEACON)) {
 		struct sk_buff *skb;
+		if (!(priv->feature & HW_SET_PARMS_FEATURES_HOST_BEACON)) {
+			if ((info->ssid[0] != '\0') &&
+			    (info->ssid_len != 0) &&
+			    (!info->hidden_ssid)) {
+				if (mwl_vif->broadcast_ssid != true) {
+					mwl_fwcmd_broadcast_ssid_enable(hw, vif, true);
+					mwl_vif->broadcast_ssid = true;
+				}
+			} else {
+				if (mwl_vif->broadcast_ssid != false) {
+					mwl_fwcmd_broadcast_ssid_enable(hw, vif, false);
+					mwl_vif->broadcast_ssid = false;
+				}
+			}
+		}
+		else {
+			spin_lock_bh(&priv->vif_lock);
+			if (mwl_vif->bintval != ieee80211_tu_to_usec(info->beacon_int))
+				mwl_vif->bintval = ieee80211_tu_to_usec(info->beacon_int);
 
-		if ((info->ssid[0] != '\0') &&
-		    (info->ssid_len != 0) &&
-		    (!info->hidden_ssid)) {
-			if (mwl_vif->broadcast_ssid != true) {
-				mwl_fwcmd_broadcast_ssid_enable(hw, vif, true);
-				mwl_vif->broadcast_ssid = true;
+			if (info->enable_beacon) {
+				mwl_vif->nexttbtt = jiffies + usecs_to_jiffies(mwl_vif->bintval);
+
+				if (mwl_vif->nexttbtt < priv->nexttbtt) {
+					priv->nexttbtt = mwl_vif->nexttbtt;
+				}
+
+				if (unlikely(!priv->beaconing_started))
+					priv->beaconing_started = true;
+
+				if (unlikely(priv->nexttbtt < jiffies))
+					priv->nexttbtt = jiffies + HZ;
+
+				ieee80211_queue_delayed_work(hw, &priv->beaconing, priv->nexttbtt - jiffies);
+
 			}
-		} else {
-			if (mwl_vif->broadcast_ssid != false) {
-				mwl_fwcmd_broadcast_ssid_enable(hw, vif, false);
-				mwl_vif->broadcast_ssid = false;
-			}
+			spin_unlock_bh(&priv->vif_lock);
 		}
 
 		if (!mwl_vif->set_beacon) {
@@ -447,7 +475,7 @@ static void mwl_mac80211_bss_info_changed_ap(struct ieee80211_hw *hw,
 				struct beacon_info *b_inf = &mwl_vif->beacon_info;
 
 				mwl_fwcmd_parse_beacon(priv, mwl_vif, skb->data, skb->len);
-				if(!b_inf->valid)
+				if (!b_inf->valid)
 					goto err;
 
 				if (mwl_fwcmd_set_ies(priv, mwl_vif))
@@ -477,8 +505,28 @@ err:
 		}
 	}
 
-	if (changed & BSS_CHANGED_BEACON_ENABLED)
+	if (changed & BSS_CHANGED_BEACON_ENABLED) {
 		mwl_fwcmd_bss_start(hw, vif, info->enable_beacon);
+		if (info->enable_beacon) {
+			if (priv->feature & HW_SET_PARMS_FEATURES_HOST_BEACON) {
+				spin_lock_bh(&priv->vif_lock);
+				if (mwl_vif->bintval) {
+					mwl_vif->nexttbtt = jiffies + usecs_to_jiffies(mwl_vif->bintval);
+
+					if (mwl_vif->nexttbtt < priv->nexttbtt)
+						priv->nexttbtt = mwl_vif->nexttbtt;
+
+					ieee80211_queue_delayed_work(hw, &priv->beaconing, priv->nexttbtt - jiffies);
+					priv->beaconing_started = true;
+				}
+				spin_unlock_bh(&priv->vif_lock);
+			}
+		}
+		else {
+			mwl_vif->set_beacon = false;
+			priv->beaconing_started = false;
+		}
+	}
 }
 
 static void mwl_mac80211_bss_info_changed(struct ieee80211_hw *hw,
