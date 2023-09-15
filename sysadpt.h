@@ -69,6 +69,8 @@
 
 #define SYSADPT_MAX_TID                8
 
+#define SYSADPT_MAX_BC_BUFFER          32
+
 #define SYSADPT_QUIET_PERIOD_DEFAULT   100
 
 #define SYSADPT_QUIET_PERIOD_MIN       25
