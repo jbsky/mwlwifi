@@ -531,7 +531,10 @@ void pcie_tx_xmit_ndp(struct ieee80211_hw *hw,
 	k_conf = tx_info->control.hw_key;
 	mwl_vif = mwl_dev_get_vif(tx_info->control.vif);
 	index = skb_get_queue_mapping(skb);
-	sta = control->sta;
+
+	if (control)
+		sta = control->sta;
+
 	sta_info = sta ? mwl_dev_get_sta(sta) : NULL;
 
 	wh = (struct ieee80211_hdr *)skb->data;
