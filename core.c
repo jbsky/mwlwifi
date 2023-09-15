@@ -19,6 +19,7 @@
 
 #include "sysadpt.h"
 #include "core.h"
+#include "mgmt.h"
 #include "vendor_cmd.h"
 #include "thermal.h"
 #include "debugfs.h"
@@ -809,12 +810,14 @@ static int mwl_wl_init(struct mwl_priv *priv)
 	priv->dfs_min_pri_count = 4;
 	priv->bf_type = TXBF_MODE_AUTO;
 
+	priv->nexttbtt = -1;
 	/* Handle watchdog ba events */
 	INIT_WORK(&priv->heartbeat_handle, mwl_heartbeat_handle);
 	INIT_WORK(&priv->watchdog_ba_handle, mwl_watchdog_ba_events);
 	INIT_WORK(&priv->account_handle, mwl_account_handle);
 	INIT_WORK(&priv->wds_check_handle, mwl_wds_check_handle);
 	INIT_WORK(&priv->chnl_switch_handle, mwl_chnl_switch_event);
+	INIT_DELAYED_WORK(&priv->beaconing, mgmt_beaconing);
 
 	mutex_init(&priv->fwcmd_mutex);
 	spin_lock_init(&priv->vif_lock);
@@ -971,6 +974,8 @@ static void mwl_wl_deinit(struct mwl_priv *priv)
 		kfree(hw->wiphy->addresses);
 	ieee80211_unregister_hw(hw);
 	mwl_thermal_unregister(priv);
+	cancel_delayed_work(&priv->beaconing);
+	priv->beaconing_started = false;
 	cancel_work_sync(&priv->chnl_switch_handle);
 	cancel_work_sync(&priv->account_handle);
 	cancel_work_sync(&priv->wds_check_handle);

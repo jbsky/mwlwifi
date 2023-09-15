@@ -468,7 +468,7 @@ void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
 	struct pcie_priv *pcie_priv = priv->hif.priv;
 	int index = skb_get_queue_mapping(skb);
 	struct pcie_txq *pcie_txq = &pcie_priv->pcie_txq[index];
-	struct ieee80211_sta *sta;
+	struct ieee80211_sta *sta = NULL;
 	struct ieee80211_tx_info *tx_info;
 	struct mwl_vif *mwl_vif;
 	struct ieee80211_hdr *wh;
@@ -484,7 +484,8 @@ void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
 	struct pcie_tx_ctrl *tx_ctrl;
 	int rc;
 
-	sta = control->sta;
+	if(control)
+		sta = control->sta;
 
 	wh = (struct ieee80211_hdr *)skb->data;
 	tx_info = IEEE80211_SKB_CB(skb);
@@ -565,9 +566,6 @@ void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
 			tid = (capab & IEEE80211_ADDBA_PARAM_TID_MASK) >> 2;
 			index = utils_tid_to_ac(tid);
 		}
-
-		if (unlikely(ieee80211_is_assoc_req(wh->frame_control)))
-			utils_add_basic_rates(hw->conf.chandef.chan->band, skb);
 	}
 
 	index = SYSADPT_TX_WMM_QUEUES - index - 1;

@@ -8,6 +8,7 @@ mwlwifi-objs			+= utils.o
 mwlwifi-$(CONFIG_THERMAL)	+= thermal.o
 mwlwifi-$(CONFIG_DEBUG_FS)	+= debugfs.o
 mwlwifi-objs			+= hif/fwcmd.o
+mwlwifi-objs			+= mgmt.o
 mwlwifi-objs			+= hif/pcie/pcie.o
 mwlwifi-objs			+= hif/pcie/fwdl.o
 mwlwifi-objs			+= hif/pcie/8864/tx.o
