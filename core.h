@@ -365,22 +365,31 @@ struct mwl_priv {
 struct beacon_info {
 	bool valid;
 	u16 cap_info;
-	u8 power_constraint;
-	u8 b_rate_set[SYSADPT_MAX_DATA_RATES_G];
-	u8 op_rate_set[SYSADPT_MAX_DATA_RATES_G];
-	u8 ie_list_ht[148];
-	u8 ie_list_vht[24];
-	u8 *ie_wmm_ptr;
-	u8 *ie_wsc_ptr;
-	u8 *ie_rsn_ptr;
-	u8 *ie_rsn48_ptr;
-	u8 *ie_mde_ptr;
-	u8 *ie_ht_ptr;
-	u8 *ie_vht_ptr;
-	u8 *ie_country_ptr;
-	u8 *ie_meshid_ptr;
-	u8 *ie_meshcfg_ptr;
-	u8 *ie_meshchsw_ptr;
+	u8 power_constraint;		// 32 WLAN_EID_PWR_CONSTRAINT
+	u8 b_rate_set[SYSADPT_MAX_DATA_RATES_G];  // 1 WLAN_EID_SUPP_RATES
+	u8 op_rate_set[SYSADPT_MAX_DATA_RATES_G]; // 1 WLAN_EID_SUPP_RATES
+	u8 ie_ssid[32];			//   0 WLAN_EID_SSID
+					//   3 WLAN_EID_DS_PARAMS => channel used
+/* not used by firmware*/		//   5 WLAN_EID_TIM
+	u8 ie_country[64];		//   7 WLAN_EID_COUNTRY
+/* not used by firmware*/ 		//  11 WLAN_EID_QBSS_LOAD
+/* not used by firmware*/ 		//  42 WLAN_EID_ERP_INFO
+/* not used by firmware*/ 		//  59 WLAN_EID_SUPPORTED_REGULATORY_CLASSES
+	u8 ie_list_ht[148];		//  45 WLAN_EID_HT_CAPABILITY
+					//  61 WLAN_EID_HT_OPERATION
+					//  74 WLAN_EID_OVERLAP_BSS_SCAN_PARAM
+					// 127 WLAN_EID_EXT_CAPABILITY
+	u8 ie_list_vht[24];		// 191 WLAN_EID_VHT_CAPABILITY
+					// 192 WLAN_EID_VHT_OPERATION
+					// 199 WLAN_EID_OPMODE_NOTIF
+	u8 ie_wmm[26];			// 221 WLAN_EID_VENDOR_SPECIFIC
+	u8 ie_wsc[26];			// 221 WLAN_EID_VENDOR_SPECIFIC
+	u8 ie_rsn[26];			// 221 WLAN_EID_VENDOR_SPECIFIC
+	u8 ie_rsn48[64];		//  48 WLAN_EID_RSN
+	u8 ie_mde[20];			//  54 WLAN_EID_MOBILITY_DOMAIN
+	u8 ie_meshid[32];
+	u8 ie_meshcfg[64];
+	u8 ie_meshchsw[64];
 	u8 ie_wmm_len;
 	u8 ie_wsc_len;
 	u8 ie_rsn_len;
