@@ -446,10 +446,36 @@ static void mwl_mac80211_bss_info_changed_ap(struct ieee80211_hw *hw,
 			skb = ieee80211_beacon_get(hw, vif);
 
 			if (skb) {
-				mwl_fwcmd_set_beacon(hw, vif, skb->data, skb->len);
+				struct beacon_info *b_inf = &mwl_vif->beacon_info;
+
+				mwl_fwcmd_parse_beacon(priv, mwl_vif, skb->data, skb->len);
+				if(!b_inf->valid)
+					goto err;
+
+				if (mwl_fwcmd_set_ies(priv, mwl_vif))
+					goto err;
+
+				if (mwl_fwcmd_set_wsc_ie(hw, b_inf->ie_wsc_len, &b_inf->ie_wsc[0]))
+					goto err;
+
+				if (mwl_fwcmd_set_ap_beacon(priv, mwl_vif, &vif->bss_conf))
+					goto err;
+
+				if (mwl_fwcmd_set_spectrum_mgmt(priv, !!(b_inf->cap_info & WLAN_CAPABILITY_SPECTRUM_MGMT)))
+					goto err;
+
+				if (b_inf->power_constraint &&
+					mwl_fwcmd_set_power_constraint(priv, b_inf->power_constraint))
+					goto err;
+
+				if (mwl_fwcmd_set_country_code(priv, mwl_vif, &vif->bss_conf))
+					goto err;
+
+				mwl_vif->set_beacon = true;
+
+err:
 				dev_kfree_skb_any(skb);
 			}
-			mwl_vif->set_beacon = true;
 		}
 	}
 
