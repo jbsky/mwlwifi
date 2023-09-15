@@ -145,9 +145,6 @@ int mwl_fwcmd_remove_mac_addr(struct ieee80211_hw *hw,
 int mwl_fwcmd_bss_start(struct ieee80211_hw *hw,
 			struct ieee80211_vif *vif, bool enable);
 
-int mwl_fwcmd_set_beacon(struct ieee80211_hw *hw,
-			 struct ieee80211_vif *vif, u8 *beacon, int len);
-
 int mwl_fwcmd_set_new_stn_add(struct ieee80211_hw *hw,
 			      struct ieee80211_vif *vif,
 			      struct ieee80211_sta *sta);
@@ -281,5 +278,23 @@ int mwl_fwcmd_get_txpwrlmt_cfg_data(struct ieee80211_hw *hw);
 int mwl_fwcmd_mcast_cts(struct ieee80211_hw *hw, u8 enable);
 
 void mwl_fwcmd_get_survey(struct ieee80211_hw *hw, int idx);
+
+int mwl_fwcmd_set_power_constraint(struct mwl_priv *priv,
+				   u32 power_constraint);
+
+int mwl_fwcmd_set_country_code(struct mwl_priv *priv,
+			       struct mwl_vif *mwl_vif,
+			       struct ieee80211_bss_conf *bss_conf);
+
+int mwl_fwcmd_set_spectrum_mgmt(struct mwl_priv *priv, bool enable);
+
+int mwl_fwcmd_set_ap_beacon(struct mwl_priv *priv,
+			    struct mwl_vif *mwl_vif,
+			    struct ieee80211_bss_conf *bss_conf);
+
+int mwl_fwcmd_set_ies(struct mwl_priv *priv, struct mwl_vif *mwl_vif);
+
+void mwl_fwcmd_parse_beacon(struct mwl_priv *priv,
+			    struct mwl_vif *vif, u8 *beacon, int len);
 
 #endif /* _FWCMD_H_ */
