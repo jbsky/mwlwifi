@@ -71,6 +71,23 @@ static inline int utils_tid_to_ac(u8 tid)
 	return -1;
 }
 
+static inline int utils_tx_h_seq_no(struct sk_buff *skb, int tx_seq_no)
+{
+	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
+
+	if (tx_seq_no == 0)
+		tx_seq_no = 0x1000;
+
+	if (info->flags & IEEE80211_TX_CTL_FIRST_FRAGMENT)
+		tx_seq_no += 0x10;
+
+	hdr->seq_ctrl &= cpu_to_le16(IEEE80211_SCTL_FRAG);
+	hdr->seq_ctrl |= cpu_to_le16(tx_seq_no);
+
+	return tx_seq_no;
+}
+
 static inline void utils_add_basic_rates(int band, struct sk_buff *skb)
 {
 	struct ieee80211_mgmt *mgmt;
