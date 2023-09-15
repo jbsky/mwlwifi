@@ -538,24 +538,24 @@ static ssize_t mwl_debugfs_vif_read(struct file *file, char __user *ubuf,
 				 mwl_vif->is_hw_crypto_enabled ?
 				 "true" : "false");
 		beacon_info = &mwl_vif->beacon_info;
-		dump_data(p, size, &len, beacon_info->ie_wmm_ptr,
+		dump_data(p, size, &len, &beacon_info->ie_wmm[0],
 			  beacon_info->ie_wmm_len, "WMM:");
-		dump_data(p, size, &len, beacon_info->ie_rsn_ptr,
+		dump_data(p, size, &len, &beacon_info->ie_rsn[0],
 			  beacon_info->ie_rsn_len, "RSN:");
-		dump_data(p, size, &len, beacon_info->ie_rsn48_ptr,
+		dump_data(p, size, &len, &beacon_info->ie_rsn48[0],
 			  beacon_info->ie_rsn48_len, "RSN48:");
-		dump_data(p, size, &len, beacon_info->ie_mde_ptr,
+		dump_data(p, size, &len, &beacon_info->ie_mde[0],
 			  beacon_info->ie_mde_len, "MDE:");
-		dump_data(p, size, &len, beacon_info->ie_ht_ptr,
+		dump_data(p, size, &len, &beacon_info->ie_list_ht[0],
 			  beacon_info->ie_ht_len, "HT:");
-		dump_data(p, size, &len, beacon_info->ie_vht_ptr,
+		dump_data(p, size, &len, &beacon_info->ie_list_vht[0],
 			  beacon_info->ie_vht_len, "VHT:");
 		if (vif->type == NL80211_IFTYPE_MESH_POINT) {
-			dump_data(p, size, &len, beacon_info->ie_meshid_ptr,
+			dump_data(p, size, &len, &beacon_info->ie_meshid[0],
 				  beacon_info->ie_meshid_len, "MESHID:");
-			dump_data(p, size, &len, beacon_info->ie_meshcfg_ptr,
+			dump_data(p, size, &len, &beacon_info->ie_meshcfg[0],
 				  beacon_info->ie_meshcfg_len, "MESHCFG:");
-			dump_data(p, size, &len, beacon_info->ie_meshchsw_ptr,
+			dump_data(p, size, &len, &beacon_info->ie_meshchsw[0],
 				  beacon_info->ie_meshchsw_len, "MESHCHSW:");
 		}
 	}
