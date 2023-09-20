@@ -619,6 +619,9 @@ static ssize_t mwl_debugfs_ampdu_read(struct file *file, char __user *ubuf,
 	if (!p)
 		return -ENOMEM;
 
+	if (priv->chip_type == MWL8964)
+		return -EPERM;
+
 	len += scnprintf(p + len, size - len, "debug_ampdu: %d\n", priv->debug_ampdu);
 	len += scnprintf(p + len, size - len, "=================\n");
 
