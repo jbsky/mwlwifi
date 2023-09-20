@@ -516,7 +516,7 @@ static void pcie_timer_routine(struct ieee80211_hw *hw)
 	struct mwl_ampdu_stream *stream;
 	struct mwl_sta *sta_info;
 	struct mwl_tx_info *tx_stats;
-	int i;
+	u8 i;
 
 	if (jiffies - priv->jiffies_ampdu < CHECK_BA_TRAFFIC_TIME)
 		return;
