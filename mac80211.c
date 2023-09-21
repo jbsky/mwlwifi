@@ -1007,4 +1007,5 @@ const struct ieee80211_ops mwl_mac80211_ops = {
 	.pre_channel_switch = mwl_mac80211_chnl_switch,
 	.sw_scan_start      = mwl_mac80211_sw_scan_start,
 	.sw_scan_complete   = mwl_mac80211_sw_scan_complete,
+	.wake_tx_queue      = ieee80211_handle_wake_tx_queue,
 };
