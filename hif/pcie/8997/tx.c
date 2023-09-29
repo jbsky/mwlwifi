@@ -184,9 +184,6 @@ static inline void pcie_tx_skb(struct mwl_priv *priv,
 	struct pcie_data_buf *data_buf;
 	const u32 num_tx_buffs = PCIE_MAX_TXRX_BD << PCIE_TX_START_PTR;
 
-	if (WARN_ON(!tx_skb))
-		return;
-
 	tx_info = IEEE80211_SKB_CB(tx_skb);
 	tx_ctrl = (struct pcie_tx_ctrl *)tx_info->driver_data;
 	sta = (struct ieee80211_sta *)tx_ctrl->sta;

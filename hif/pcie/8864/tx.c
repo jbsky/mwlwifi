@@ -243,9 +243,6 @@ static inline void pcie_tx_skb(struct pcie_txq *pcie_txq,
 	int tailpad = 0;
 	struct ieee80211_key_conf *k_conf;
 
-	if (WARN_ON(!tx_skb))
-		return;
-
 	tx_info = IEEE80211_SKB_CB(tx_skb);
 	tx_ctrl = (struct pcie_tx_ctrl *)tx_info->driver_data;
 	sta = (struct ieee80211_sta *)tx_ctrl->sta;
