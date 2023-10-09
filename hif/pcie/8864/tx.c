@@ -223,7 +223,6 @@ static inline void pcie_tx_skb(struct mwl_priv *priv, int desc_num,
 	struct pcie_tx_desc *tx_desc;
 	struct ieee80211_sta *sta;
 	struct ieee80211_vif *vif;
-	struct mwl_vif *mwl_vif;
 	struct pcie_dma_data *dma_data;
 	struct ieee80211_hdr *wh;
 	dma_addr_t dma;
@@ -234,7 +233,6 @@ static inline void pcie_tx_skb(struct mwl_priv *priv, int desc_num,
 	tx_ctrl = (struct pcie_tx_ctrl *)tx_info->driver_data;
 	sta = (struct ieee80211_sta *)tx_ctrl->sta;
 	vif = (struct ieee80211_vif *)tx_info->control.vif;
-	mwl_vif = mwl_dev_get_vif(vif);
 	k_conf = (struct ieee80211_key_conf *)tx_info->control.hw_key;
 
 	if (k_conf) {
@@ -606,7 +604,6 @@ void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
 	struct ieee80211_sta *sta = NULL;
 	struct ieee80211_hdr *wh = (struct ieee80211_hdr *)skb->data;
 	struct ieee80211_tx_info *tx_info = IEEE80211_SKB_CB(skb);
-	struct mwl_vif *mwl_vif = mwl_dev_get_vif(tx_info->control.vif);
 	struct mwl_ampdu_stream *stream = NULL;
 	struct pcie_tx_ctrl *tx_ctrl;
 	/* Setup firmware control bit fields for each frame type. */
@@ -648,8 +645,7 @@ void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
 
 	if (tx_info->flags & IEEE80211_TX_CTL_ASSIGN_SEQ) {
 		wh->seq_ctrl &= cpu_to_le16(IEEE80211_SCTL_FRAG);
-		wh->seq_ctrl |= cpu_to_le16(mwl_vif->seqno);
-		mwl_vif->seqno += 0x10;
+		wh->seq_ctrl |= cpu_to_le16(0x0010);
 	}
 
 	if (ieee80211_is_data(wh->frame_control)) {
