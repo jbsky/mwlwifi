@@ -211,7 +211,6 @@ static int mwl_mac80211_add_interface(struct ieee80211_hw *hw,
 	memset(mwl_vif, 0, sizeof(*mwl_vif));
 	mwl_vif->type = vif->type;
 	mwl_vif->macid = macid;
-	mwl_vif->seqno = 0;
 	mwl_vif->is_hw_crypto_enabled = false;
 	mwl_vif->beacon_info.valid = false;
 	mwl_vif->set_beacon = false;

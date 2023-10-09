@@ -407,7 +407,6 @@ struct mwl_vif {
 	struct list_head list;
 	enum nl80211_iftype type;
 	int macid;       /* Firmware macid for this vif.  */
-	u16 seqno;       /* Non AMPDU sequence number assigned by driver.  */
 	struct {         /* Saved WEP keys */
 		u8 enabled;
 		u8 key[sizeof(struct ieee80211_key_conf) + WLAN_KEY_LEN_WEP104];
