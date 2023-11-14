@@ -1,0 +1,54 @@
+Index: mwlwifi-2023-11-09-47b0cd8a/debugfs.c
+===================================================================
+--- mwlwifi-2023-11-09-47b0cd8a.orig/debugfs.c
++++ mwlwifi-2023-11-09-47b0cd8a/debugfs.c
+@@ -1342,7 +1342,7 @@ done:
+ 				 priv->reg_value);
+ 	else
+ 		len += scnprintf(p + len, size - len,
+-				 "error: %d(%u 0x%08x 0x%08x)\n",
++				 "error: %zd(%u 0x%08x 0x%08x)\n",
+ 				 ret, priv->reg_type, priv->reg_offset,
+ 				 priv->reg_value);
+ 
+Index: mwlwifi-2023-11-09-47b0cd8a/hif/fwcmd.c
+===================================================================
+--- mwlwifi-2023-11-09-47b0cd8a.orig/hif/fwcmd.c
++++ mwlwifi-2023-11-09-47b0cd8a/hif/fwcmd.c
+@@ -3625,7 +3625,7 @@ int mwl_fwcmd_get_fw_core_dump(struct ie
+ 	core_dump->size_kb = pcmd->cmd_data.coredump.size_kb;
+ 	core_dump->flags = pcmd->cmd_data.coredump.flags;
+ 	memcpy(buff,
+-	       (const void *)((u32)pcmd +
++	       (const void *)((uintptr_t)pcmd +
+ 	       sizeof(struct hostcmd_cmd_get_fw_core_dump) -
+ 	       sizeof(struct hostcmd_cmd_get_fw_core_dump_)),
+ 	       MAX_CORE_DUMP_BUFFER);
+Index: mwlwifi-2023-11-09-47b0cd8a/hif/pcie/8964/tx_ndp.c
+===================================================================
+--- mwlwifi-2023-11-09-47b0cd8a.orig/hif/pcie/8964/tx_ndp.c
++++ mwlwifi-2023-11-09-47b0cd8a/hif/pcie/8964/tx_ndp.c
+@@ -336,7 +336,7 @@ int pcie_tx_init_ndp(struct ieee80211_hw
+ 
+ 	if (sizeof(struct pcie_tx_ctrl_ndp) >
+ 	    sizeof(tx_info->driver_data)) {
+-		wiphy_err(hw->wiphy, "driver data is not enough: %d (%d)\n",
++		wiphy_err(hw->wiphy, "driver data is not enough: %zu (%zu)\n",
+ 			  sizeof(struct pcie_tx_ctrl_ndp),
+ 			  sizeof(tx_info->driver_data));
+ 		return -ENOMEM;
+Index: mwlwifi-2023-11-09-47b0cd8a/hif/pcie/pcie.c
+===================================================================
+--- mwlwifi-2023-11-09-47b0cd8a.orig/hif/pcie/pcie.c
++++ mwlwifi-2023-11-09-47b0cd8a/hif/pcie/pcie.c
+@@ -1464,8 +1464,8 @@ static void pcie_bf_mimo_ctrl_decode(str
+ 			       &fp_data->f_pos);
+ 		filp_close(fp_data, current->files);
+ 	} else {
+-		wiphy_err(priv->hw->wiphy, "Error opening %s! %x\n",
+-			  filename, (unsigned int)fp_data);
++		wiphy_err(priv->hw->wiphy, "Error opening %s! %ld\n",
++			  filename, PTR_ERR(fp_data));
+ 	}
+ 
+ #if LINUX_VERSION_CODE < KERNEL_VERSION(5,10,0)
