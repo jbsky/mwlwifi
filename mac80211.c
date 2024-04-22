@@ -183,6 +183,9 @@ static int mwl_mac80211_add_interface(struct ieee80211_hw *hw,
 	u32 macids_supported;
 	int macid;
 
+	if (vif->type == NL80211_IFTYPE_MONITOR)
+		priv->decrypt_rx = true;
+
 	switch (vif->type) {
 	case NL80211_IFTYPE_AP:
 	case NL80211_IFTYPE_MESH_POINT:
