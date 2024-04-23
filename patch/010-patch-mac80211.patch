@@ -1,0 +1,22 @@
+diff --git a/hif/fwcmd.c b/hif/fwcmd.c
+index 0f490ba..92adf4f 100644
+--- a/hif/fwcmd.c
++++ b/hif/fwcmd.c
+@@ -2100,7 +2100,7 @@ int mwl_fwcmd_set_new_stn_add(struct ieee80211_hw *hw,
+ 		for (i = 0; i < 4; i++) {
+ 			if (i < sta->deflink.rx_nss) {
+ 				pcmd->peer_info.ht_rates[i] =
+-					sta->ht_cap.mcs.rx_mask[i];
++					sta->deflink.ht_cap.mcs.rx_mask[i];
+ 			} else {
+ 				pcmd->peer_info.ht_rates[i] = 0;
+ 			}
+@@ -2111,7 +2111,7 @@ int mwl_fwcmd_set_new_stn_add(struct ieee80211_hw *hw,
+ 			((sta->deflink.ht_cap.ampdu_density & 7) << 2);
+ 	}
+ 
+-	if (sta->vht_cap.vht_supported) {
++	if (sta->deflink.vht_cap.vht_supported) {
+ 		u32 rx_mcs_map_mask = 0;
+ 
+ 		rx_mcs_map_mask = ((0x0000FFFF) >> (sta->deflink.rx_nss * 2))
