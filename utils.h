@@ -41,6 +41,10 @@ static inline bool utils_is_crypted(struct ieee80211_hdr *wh)
 	if (ieee80211_is_auth(wh->frame_control))
 		return false;
 
+	if (ieee80211_is_mgmt(wh->frame_control) &&
+		is_multicast_ether_addr(wh->addr1))
+		return false;
+
 	return true;
 }
 
