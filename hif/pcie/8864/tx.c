@@ -405,6 +405,9 @@ static void pcie_non_pfu_tx_done(struct mwl_priv *priv)
 
 	spin_lock_bh(&pcie_priv->tx_desc_lock);
 	while (num--) {
+		if (!(pcie_priv->fw_desc_cnt[num]))
+			continue;
+
 		desc = &pcie_priv->desc_data[num];
 		tx_hndl = desc->pstale_tx_hndl;
 		tx_desc = tx_hndl->pdesc;
@@ -474,7 +477,7 @@ next:
 	}
 	spin_unlock_bh(&pcie_priv->tx_desc_lock);
 
-	if (pcie_priv->is_tx_done_schedule) {
+if (pcie_priv->is_tx_done_schedule) {
 		pcie_mask_int(pcie_priv, MACREG_A2HRIC_BIT_TX_DONE, true);
 		tasklet_schedule(&pcie_priv->tx_task);
 		pcie_priv->is_tx_done_schedule = false;
@@ -660,13 +663,12 @@ void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
 	}
 
 	if (is_multicast_ether_addr(ieee80211_get_DA(wh)) ||
-	  is_broadcast_ether_addr(ieee80211_get_DA(wh)) ||
 	  eapol_frame ||
 	  tx_info->flags & IEEE80211_TX_CTL_USE_MINRATE)
 		xmitcontrol |= EAGLE_TXD_XMITCTRL_USE_MC_RATE;
 
 	if (sta && sta->ht_cap.ht_supported &&
-	  !(xmitcontrol & EAGLE_TXD_XMITCTRL_USE_MC_RATE) &&
+	  !eapol_frame &&
 	    ieee80211_is_data_qos(wh->frame_control)) {
 		tid = qos & 0xf;
 		pcie_tx_count_packet(sta, tid);
