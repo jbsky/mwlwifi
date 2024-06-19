@@ -302,7 +302,7 @@ static inline bool pcie_rx_process_mesh_amsdu(struct mwl_priv *priv,
 		else
 			status->flag &= ~RX_FLAG_AMSDU_MORE;
 		memcpy(IEEE80211_SKB_RXCB(newskb), status, sizeof(*status));
-		ieee80211_rx(priv->hw, newskb);
+		ieee80211_rx_napi(priv->hw, NULL, newskb, &priv->napi);
 	}
 
 	dev_kfree_skb_any(skb);
@@ -378,10 +378,10 @@ void pcie_8864_rx_deinit(struct ieee80211_hw *hw)
 	pcie_rx_ring_free(priv);
 }
 
-void pcie_8864_rx_recv(unsigned long data)
+int pcie_8864_poll_napi(struct napi_struct *napi, int budget)
 {
-	struct ieee80211_hw *hw = (struct ieee80211_hw *)data;
-	struct mwl_priv *priv = hw->priv;
+	struct mwl_priv *priv = container_of(napi, struct mwl_priv, napi);
+	struct ieee80211_hw *hw = priv->hw;
 	struct pcie_priv *pcie_priv = priv->hif.priv;
 	struct pcie_desc_data *desc;
 	struct pcie_rx_hndl *curr_hndl;
@@ -399,14 +399,12 @@ void pcie_8864_rx_recv(unsigned long data)
 	curr_hndl = desc->pnext_rx_hndl;
 
 	if (!curr_hndl) {
-		pcie_mask_int(pcie_priv, MACREG_A2HRIC_BIT_RX_RDY, true);
-		pcie_priv->is_rx_schedule = false;
 		wiphy_warn(hw->wiphy, "busy or no receiving packets\n");
-		return;
+		goto end_poll;
 	}
 
 	while ((curr_hndl->pdesc->rx_control == EAGLE_RXD_CTRL_DMA_OWN) &&
-	       (work_done < pcie_priv->recv_limit)) {
+	       (work_done < budget)) {
 		prx_skb = curr_hndl->psk_buff;
 		if (!prx_skb)
 			goto out;
@@ -488,13 +486,13 @@ void pcie_8864_rx_recv(unsigned long data)
 					IEEE80211_SKB_RXCB(monitor_skb)->flag |= RX_FLAG_ONLY_MONITOR;
 					((struct ieee80211_hdr *)monitor_skb->data)->frame_control &= ~__cpu_to_le16(IEEE80211_FCTL_PROTECTED);
 
-					ieee80211_rx(hw, monitor_skb);
+					ieee80211_rx_napi(hw, NULL, monitor_skb, &priv->napi);
 				}
 				status->flag |= RX_FLAG_SKIP_MONITOR;
 			}
 		}
 
-		ieee80211_rx(hw, prx_skb);
+		ieee80211_rx_napi(hw, NULL, prx_skb, &priv->napi);
 out:
 		pcie_rx_refill(priv, curr_hndl);
 		curr_hndl->pdesc->rx_control = EAGLE_RXD_CTRL_DRIVER_OWN;
@@ -504,6 +502,12 @@ out:
 	}
 
 	desc->pnext_rx_hndl = curr_hndl;
-	pcie_mask_int(pcie_priv, MACREG_A2HRIC_BIT_RX_RDY, true);
-	pcie_priv->is_rx_schedule = false;
+
+end_poll:
+	if (work_done < budget) {
+		napi_complete(napi);
+		priv->hif.ops->irq_enable(hw);
+		pcie_mask_int(pcie_priv, MACREG_A2HRIC_BIT_RX_RDY, true);
+	}
+	return work_done;
 }

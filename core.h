@@ -266,6 +266,10 @@ struct mwl_priv {
 
 	struct timer_list period_timer;
 
+	/* NAPI */
+	struct net_device napi_dev;
+	struct napi_struct napi;
+
 	/* keep survey information */
 	bool sw_scanning;
 	int survey_info_idx;
