@@ -261,7 +261,8 @@ static inline void pcie_rx_process_amsdu(struct mwl_priv *priv,
 	len = wh_len;
 	data = skb->data;
 
-	status->flag |= RX_FLAG_SKIP_MONITOR;
+	if(unlikely(priv->rx_decrypt))
+		status->flag |= RX_FLAG_SKIP_MONITOR;
 
 	while (len < skb->len) {
 		frame_len = *(data + len + ETH_HLEN - 1) |
@@ -304,7 +305,11 @@ static inline void pcie_rx_process_amsdu(struct mwl_priv *priv,
 
 	*qc |= IEEE80211_QOS_CTL_A_MSDU_PRESENT;
 
-	status->flag &= ~(RX_FLAG_AMSDU_MORE | RX_FLAG_ALLOW_SAME_PN | RX_FLAG_SKIP_MONITOR);
+	status->flag &= ~(RX_FLAG_AMSDU_MORE | RX_FLAG_ALLOW_SAME_PN);
+
+	if(unlikely(priv->rx_decrypt))
+			status->flag &= ~(RX_FLAG_SKIP_MONITOR);
+
 }
 
 static inline int pcie_rx_refill(struct mwl_priv *priv,
@@ -460,24 +465,28 @@ void pcie_8864_rx_recv(unsigned long data)
 			if (*ieee80211_get_qos_ctl(wh) & IEEE80211_QOS_CTL_A_MSDU_PRESENT &&
 			    ieee80211_has_a4(wh->frame_control)) {
 				pcie_rx_process_amsdu(priv, prx_skb, status);
-				status->flag |= RX_FLAG_ONLY_MONITOR;
-				if (status->flag & RX_FLAG_DECRYPTED)
-					wh->frame_control &= ~__cpu_to_le16(IEEE80211_FCTL_PROTECTED);
+				if(unlikely(priv->rx_decrypt)) {
+					status->flag |= RX_FLAG_ONLY_MONITOR;
+					if (status->flag & RX_FLAG_DECRYPTED)
+						wh->frame_control &= ~__cpu_to_le16(IEEE80211_FCTL_PROTECTED);
 
-				ieee80211_rx(hw, prx_skb);
+					ieee80211_rx(hw, prx_skb);
+				}
 				goto out;
 			}
 		}
 
-		if (status->flag & RX_FLAG_DECRYPTED) {
-			monitor_skb = skb_copy(prx_skb, GFP_ATOMIC);
-			if (monitor_skb) {
-				IEEE80211_SKB_RXCB(monitor_skb)->flag |= RX_FLAG_ONLY_MONITOR;
-				((struct ieee80211_hdr *)monitor_skb->data)->frame_control &= ~__cpu_to_le16(IEEE80211_FCTL_PROTECTED);
+		if(unlikely(priv->rx_decrypt)) {
+			if (status->flag & RX_FLAG_DECRYPTED) {
+				monitor_skb = skb_copy(prx_skb, GFP_ATOMIC);
+				if (monitor_skb) {
+					IEEE80211_SKB_RXCB(monitor_skb)->flag |= RX_FLAG_ONLY_MONITOR;
+					((struct ieee80211_hdr *)monitor_skb->data)->frame_control &= ~__cpu_to_le16(IEEE80211_FCTL_PROTECTED);
 
-				ieee80211_rx(hw, monitor_skb);
+					ieee80211_rx(hw, monitor_skb);
+				}
+				status->flag |= RX_FLAG_SKIP_MONITOR;
 			}
-			status->flag |= RX_FLAG_SKIP_MONITOR;
 		}
 
 		if (ieee80211_is_data_qos(wh->frame_control))
