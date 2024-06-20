@@ -472,6 +472,8 @@ void pcie_8864_rx_recv(unsigned long data)
 
 					ieee80211_rx(hw, prx_skb);
 				}
+				else
+					dev_kfree_skb_any(prx_skb);
 				goto out;
 			}
 		}
