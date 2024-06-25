@@ -240,13 +240,11 @@ static inline void pcie_rx_status(struct mwl_priv *priv,
 	}
 }
 
-static inline bool pcie_rx_process_mesh_amsdu(struct mwl_priv *priv,
+static inline int pcie_rx_process_amsdu(struct mwl_priv *priv,
 					     struct sk_buff *skb,
 					     struct ieee80211_rx_status *status)
 {
 	struct ieee80211_hdr *wh;
-	struct mwl_sta *sta_info;
-	struct ieee80211_sta *sta;
 	u8 *qc;
 	int wh_len;
 	int len;
@@ -254,24 +252,16 @@ static inline bool pcie_rx_process_mesh_amsdu(struct mwl_priv *priv,
 	u8 *data;
 	u16 frame_len;
 	struct sk_buff *newskb;
+	int work_done;
 
 	wh = (struct ieee80211_hdr *)skb->data;
 
-	spin_lock_bh(&priv->sta_lock);
-	list_for_each_entry(sta_info, &priv->sta_list, list) {
-		sta = container_of((void *)sta_info, struct ieee80211_sta,
-				   drv_priv[0]);
-		if (ether_addr_equal(sta->addr, wh->addr2)) {
-			if (!sta_info->is_mesh_node) {
-				spin_unlock_bh(&priv->sta_lock);
-				return false;
-			}
-		}
-	}
-	spin_unlock_bh(&priv->sta_lock);
-
 	qc = ieee80211_get_qos_ctl(wh);
 	*qc &= ~IEEE80211_QOS_CTL_A_MSDU_PRESENT;
+
+	if(priv->rx_decrypt)
+		if(status->flag & RX_FLAG_DECRYPTED)
+			status->flag |= RX_FLAG_SKIP_MONITOR;
 
 	wh_len = ieee80211_hdrlen(wh->frame_control);
 	len = wh_len;
@@ -303,11 +293,22 @@ static inline bool pcie_rx_process_mesh_amsdu(struct mwl_priv *priv,
 			status->flag &= ~RX_FLAG_AMSDU_MORE;
 		memcpy(IEEE80211_SKB_RXCB(newskb), status, sizeof(*status));
 		ieee80211_rx_napi(priv->hw, NULL, newskb, &priv->napi);
+		work_done++;
 	}
 
-	dev_kfree_skb_any(skb);
+	if(priv->rx_decrypt) {
+		if (status->flag & RX_FLAG_DECRYPTED) {
 
-	return true;
+			status->flag &= ~RX_FLAG_SKIP_MONITOR;
+			status->flag |= RX_FLAG_ONLY_MONITOR;
+			((struct ieee80211_hdr *)skb->data)->frame_control &= ~__cpu_to_le16(IEEE80211_FCTL_PROTECTED);
+			ieee80211_rx_napi(priv->hw, NULL, skb, &priv->napi);
+		}
+	}
+	else
+		dev_kfree_skb_any(skb);
+
+	return work_done;
 }
 
 static inline int pcie_rx_refill(struct mwl_priv *priv,
@@ -474,8 +475,8 @@ int pcie_8864_poll_napi(struct napi_struct *napi, int budget)
 				*qc |= 7;
 
 			if ((*qc & IEEE80211_QOS_CTL_A_MSDU_PRESENT) && (ieee80211_has_a4(wh->frame_control))) {
-				if (pcie_rx_process_mesh_amsdu(priv, prx_skb, status))
-					goto out;
+				work_done += pcie_rx_process_amsdu(priv, prx_skb, status);
+				goto out;
 			}
 		}
 
