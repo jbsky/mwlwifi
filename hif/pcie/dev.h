@@ -583,6 +583,9 @@ struct pcie_priv {
 	struct tasklet_struct tx_task;
 	struct tasklet_struct tx_done_task;
 	struct tasklet_struct rx_task;
+	struct work_struct tx_done_wk;
+	struct work_struct tx_wk;
+	atomic_t work_count;
 	unsigned int tx_head_room;
 	int txq_limit;
 	int txq_wake_threshold;

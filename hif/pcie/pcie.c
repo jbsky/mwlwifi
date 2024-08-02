@@ -308,16 +308,14 @@ static int pcie_init_8864(struct ieee80211_hw *hw)
 	spin_lock_init(&pcie_priv->int_mask_lock);
 	tasklet_init(&pcie_priv->tx_task, (void *)pcie_8864_tx_skbs, (unsigned long)hw);
 	tasklet_disable(&pcie_priv->tx_task);
-	tasklet_init(&pcie_priv->tx_done_task, (void *)pcie_8864_tx_done, (unsigned long)hw);
+	tasklet_init(&pcie_priv->tx_done_task, (void *)pcie_8864_tx_done_task, (unsigned long)hw);
 	tasklet_disable(&pcie_priv->tx_done_task);
 	spin_lock_init(&pcie_priv->tx_desc_lock);
 	init_dummy_netdev(&priv->napi_dev);
 	netif_napi_add(&priv->napi_dev, &priv->napi, pcie_8864_poll_napi);
 	pcie_priv->txq_limit = PCIE_TX_QUEUE_LIMIT;
 	pcie_priv->txq_wake_threshold = PCIE_TX_WAKE_Q_THRESHOLD;
-	pcie_priv->is_tx_done_schedule = false;
 	pcie_priv->recv_limit = PCIE_RECEIVE_LIMIT;
-	pcie_priv->is_rx_schedule = false;
 
 	rc = pcie_8864_tx_init(hw);
 	if (rc) {
@@ -441,6 +439,7 @@ static void pcie_enable_data_tasks(struct ieee80211_hw *hw)
 	struct mwl_priv *priv = hw->priv;
 	struct pcie_priv *pcie_priv = priv->hif.priv;
 
+	atomic_set(&pcie_priv->work_count, 0);
 	tasklet_enable(&pcie_priv->tx_task);
 	tasklet_enable(&pcie_priv->tx_done_task);
 	napi_enable(&priv->napi);
@@ -513,6 +512,9 @@ static irqreturn_t pcie_isr_8864(struct ieee80211_hw *hw)
 	struct pcie_priv *pcie_priv = priv->hif.priv;
 	u32 int_status;
 
+	if (atomic_read(&pcie_priv->work_count))
+		return IRQ_HANDLED;
+
 	int_status = readl(pcie_priv->iobase1 + MACREG_REG_A2H_INTERRUPT_CAUSE);
 
 	if (int_status == 0x00000000)
@@ -524,28 +526,31 @@ static irqreturn_t pcie_isr_8864(struct ieee80211_hw *hw)
 		writel(~int_status,
 		       pcie_priv->iobase1 + MACREG_REG_A2H_INTERRUPT_CAUSE);
 
+		priv->hif.ops->irq_disable(hw);
+
 		if (int_status & MACREG_A2HRIC_BIT_TX_DONE) {
-			if (!pcie_priv->is_tx_done_schedule) {
-				pcie_mask_int(pcie_priv,
-					      MACREG_A2HRIC_BIT_TX_DONE, false);
-				tasklet_schedule(&pcie_priv->tx_done_task);
-				pcie_priv->is_tx_done_schedule = true;
-			}
+			atomic_inc(&pcie_priv->work_count);
+			tasklet_schedule(&pcie_priv->tx_done_task);
 		}
 
 		if (int_status & MACREG_A2HRIC_BIT_RX_RDY) {
-			pcie_mask_int(pcie_priv,
-				      MACREG_A2HRIC_BIT_RX_RDY, false);
-			priv->hif.ops->irq_disable(hw);
+			atomic_inc(&pcie_priv->work_count);
 			napi_schedule(&priv->napi);
 		}
+
 		if (int_status & MACREG_A2HRIC_BIT_RADAR_DETECT) {
 			wiphy_info(hw->wiphy, "radar detected by firmware\n");
 			ieee80211_radar_detected(hw);
 		}
 
-		if (int_status & MACREG_A2HRIC_BIT_CHAN_SWITCH) ieee80211_queue_work(hw, &priv->chnl_switch_handle);
-		if (int_status & MACREG_A2HRIC_BIT_TX_WATCHDOG) ieee80211_queue_work(hw, &priv->watchdog_ba_handle);
+		if (int_status & MACREG_A2HRIC_BIT_CHAN_SWITCH)
+			ieee80211_queue_work(hw, &priv->chnl_switch_handle);
+
+		if (int_status & MACREG_A2HRIC_BIT_TX_WATCHDOG)
+			ieee80211_queue_work(hw, &priv->watchdog_ba_handle);
+
+		if (atomic_read(&pcie_priv->work_count) == 0)
+			priv->hif.ops->irq_enable(hw);
 	}
 
 	return IRQ_HANDLED;

@@ -407,7 +407,7 @@ int pcie_8864_poll_napi(struct napi_struct *napi, int budget)
 	while ((curr_hndl->pdesc->rx_control == EAGLE_RXD_CTRL_DMA_OWN) &&
 	       (work_done < budget)) {
 		prx_skb = curr_hndl->psk_buff;
-		if (!prx_skb)
+		if (unlikely(!prx_skb))
 			goto out;
 		dma_unmap_single(&(pcie_priv->pdev)->dev,
 				 le32_to_cpu(curr_hndl->pdesc->pphys_buff_data),
@@ -415,13 +415,13 @@ int pcie_8864_poll_napi(struct napi_struct *napi, int budget)
 				 DMA_FROM_DEVICE);
 		pkt_len = le16_to_cpu(curr_hndl->pdesc->pkt_len);
 
-		if (skb_tailroom(prx_skb) < pkt_len) {
+		if (unlikely(skb_tailroom(prx_skb) < pkt_len)) {
 			dev_kfree_skb_any(prx_skb);
 			goto out;
 		}
 
-		if (curr_hndl->pdesc->channel !=
-		    hw->conf.chandef.chan->hw_value) {
+		if (unlikely(curr_hndl->pdesc->channel !=
+		    hw->conf.chandef.chan->hw_value)) {
 			dev_kfree_skb_any(prx_skb);
 			goto out;
 		}
@@ -507,8 +507,9 @@ out:
 end_poll:
 	if (work_done < budget) {
 		napi_complete(napi);
-		priv->hif.ops->irq_enable(hw);
-		pcie_mask_int(pcie_priv, MACREG_A2HRIC_BIT_RX_RDY, true);
+		atomic_dec(&pcie_priv->work_count);
+		if (atomic_read(&pcie_priv->work_count) == 0)
+			priv->hif.ops->irq_enable(hw);
 	}
 	return work_done;
 }
