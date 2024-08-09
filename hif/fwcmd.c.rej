@@ -1,0 +1,20 @@
+--- hif/fwcmd.c
++++ hif/fwcmd.c
+@@ -622,11 +622,15 @@ einval:
+ }
+ 
+ int mwl_fwcmd_set_ap_beacon(struct mwl_priv *priv,
+-			    struct mwl_vif *mwl_vif,
+-			    struct ieee80211_bss_conf *bss_conf)
++			    struct ieee80211_vif *vif)
+ {
+ 	struct hostcmd_cmd_ap_beacon *pcmd;
+ 	struct ds_params *phy_ds_param_set;
++	struct mwl_vif *mwl_vif;
++	struct ieee80211_bss_conf *bss_conf;
++
++	mwl_vif = mwl_dev_get_vif(vif);
++	bss_conf = &vif->bss_conf;
+ 
+ 	/* wmm structure of start command is defined less one byte,
+ 	 * due to following field country is not used, add byte one

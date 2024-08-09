@@ -1,0 +1,11 @@
+--- hif/pcie/8864/tx.c
++++ hif/pcie/8864/tx.c
+@@ -667,7 +667,7 @@ void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
+ 	  tx_info->flags & IEEE80211_TX_CTL_USE_MINRATE)
+ 		xmitcontrol |= EAGLE_TXD_XMITCTRL_USE_MC_RATE;
+ 
+-	if (sta && sta->ht_cap.ht_supported &&
++	if (sta && sta->deflink.ht_cap.ht_supported &&
+ 	   !(xmitcontrol & EAGLE_TXD_XMITCTRL_USE_MC_RATE) &&
+ 	    ieee80211_is_data_qos(wh->frame_control)) {
+ 		tid = qos & 0xf;
