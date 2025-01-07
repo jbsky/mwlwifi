@@ -46,19 +46,21 @@ static const struct ieee80211_channel mwl_channels_24[] = {
 };
 
 static const struct ieee80211_rate mwl_rates_24[] = {
-	{ .bitrate = 10, .hw_value = 2, },
-	{ .bitrate = 20, .hw_value = 4, },
-	{ .bitrate = 55, .hw_value = 11, },
-	{ .bitrate = 110, .hw_value = 22, },
-	{ .bitrate = 220, .hw_value = 44, },
-	{ .bitrate = 60, .hw_value = 12, },
-	{ .bitrate = 90, .hw_value = 18, },
-	{ .bitrate = 120, .hw_value = 24, },
-	{ .bitrate = 180, .hw_value = 36, },
-	{ .bitrate = 240, .hw_value = 48, },
-	{ .bitrate = 360, .hw_value = 72, },
-	{ .bitrate = 480, .hw_value = 96, },
-	{ .bitrate = 540, .hw_value = 108, },
+    // Supported Rates (premiers 8 taux)
+    { .bitrate = 10,  .hw_value = 2,   .flags = IEEE80211_RATE_SHORT_PREAMBLE },  // 1Mbps
+    { .bitrate = 20,  .hw_value = 4,   .flags = IEEE80211_RATE_SHORT_PREAMBLE },  // 2Mbps
+    { .bitrate = 55,  .hw_value = 11,  .flags = IEEE80211_RATE_SHORT_PREAMBLE },  // 5.5Mbps
+    { .bitrate = 110, .hw_value = 22,  .flags = IEEE80211_RATE_SHORT_PREAMBLE },  // 11Mbps
+    
+    { .bitrate = 60,  .hw_value = 12,  },  // 6Mbps
+    { .bitrate = 90,  .hw_value = 18,  },  // 9Mbps
+    { .bitrate = 120, .hw_value = 24,  },  // 12Mbps
+    { .bitrate = 180, .hw_value = 36,  },  // 18Mbps
+    // Extended Supported Rates
+    { .bitrate = 240, .hw_value = 48,  },  // 24Mbps
+    { .bitrate = 360, .hw_value = 72,  },  // 36Mbps
+    { .bitrate = 480, .hw_value = 96,  },  // 48Mbps
+    { .bitrate = 540, .hw_value = 108, }   // 54Mbps
 };
 
 static const struct ieee80211_channel mwl_channels_50[] = {
