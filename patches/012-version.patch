@@ -1,0 +1,13 @@
+diff --git a/hif/pcie/dev.h b/hif/pcie/dev.h
+index a7014a0..f8bb6be 100644
+--- a/hif/pcie/dev.h
++++ b/hif/pcie/dev.h
+@@ -27,7 +27,7 @@
+ #include <net/mac80211.h>
+ 
+ #define PCIE_DRV_NAME    KBUILD_MODNAME
+-#define PCIE_DRV_VERSION "10.4.11.0"
++#define PCIE_DRV_VERSION "16de960"
+ 
+ #define PCIE_MIN_BYTES_HEADROOM   64
+ #define PCIE_MIN_TX_HEADROOM_KF2  96
