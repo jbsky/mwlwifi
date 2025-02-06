@@ -1,17 +1,18 @@
 # Openwrt
 ## Instructions for compiling the module:
 
-* download sdk https://archive.openwrt.org/releases/22.03.2/targets/mvebu/cortexa9/openwrt-sdk-22.03.2-mvebu-cortexa9_gcc-11.2._musl_eabi.Linux-x86_64.tar.xz
+* download sdk https://downloads.openwrt.org/releases/23.05.5/targets/mvebu/cortexa9/openwrt-sdk-23.05.5-mvebu-cortexa9_gcc-12.3.0_musl_eabi.Linux-x86_64.tar.xz
 
 /!\ Add to env if you compile as root user
 ```
 export FORCE_UNSAFE_CONFIGURE="1"
 ```
 
-update and install feeds
+update and install feeds, checkout v23.05.5 tag
 ```
 ./scripts/feeds update -a
 ./scripts/feeds install -a
+cd feeds/base && git checkout v23.05.5 && cd ../..
 make menuconfig
 ```
 
@@ -28,15 +29,11 @@ make menuconfig
 ```
 nano ./feeds/base/package/kernel/mwlwifi/Makefile
 ```
-2. drop patch
-```
-rm ./feeds/base/package/kernel/mwlwifi/patches -Rf
-```
-3. compile
+2. compile
 ```
 make -j$(nproc) package/mwlwifi/compile
 ```
-4. Find ipk here
+3. Find ipk here
 ```
 ls -al bin/targets/mvebu/cortexa9/packages/kmod-mwlwifi_*
 ```
