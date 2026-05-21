@@ -364,10 +364,10 @@ static ssize_t mwl_debugfs_info_read(struct file *file, char __user *ubuf,
 			 "-----------------------=>  address| address|qlen|fw_desc_cnt\n");
 		spin_lock_irqsave(&pcie_priv->tx_desc_lock, flags);
 		len += scnprintf(p + len, size - len,
-				"wcb_base0   : %x => %8x|%8p|%4d|%d\n", get_hw_spec->wcb_base0, *((unsigned int *)le32_to_cpu(get_hw_spec->wcb_base0)),(void *)*((unsigned int *)le32_to_cpu(get_hw_spec->wcb_base0)),skb_queue_len(&pcie_priv->txq[0]),pcie_priv->fw_desc_cnt[0]);
+				"wcb_base0   : %x => %8px|%8p|%4d|%d\n", get_hw_spec->wcb_base0, (void *)(uintptr_t)le32_to_cpu(get_hw_spec->wcb_base0),(void *)(uintptr_t)le32_to_cpu(get_hw_spec->wcb_base0),skb_queue_len(&pcie_priv->txq[0]),pcie_priv->fw_desc_cnt[0]);
 		for(i = 0; i < SYSADPT_TOTAL_TX_QUEUES - 1; i++)
 			len += scnprintf(p + len, size - len,
-				"wcb_base[%2d]: %x => %8x|%8p|%4d|%d\n", i, get_hw_spec->wcb_base[i], *((unsigned int *)le32_to_cpu(get_hw_spec->wcb_base[i])),(void *)*((unsigned int *)le32_to_cpu(get_hw_spec->wcb_base[i])),skb_queue_len(&pcie_priv->txq[i + 1]),pcie_priv->fw_desc_cnt[i + 1]);
+				"wcb_base[%2d]: %x => %8px|%8p|%4d|%d\n", i, get_hw_spec->wcb_base[i], (void *)(uintptr_t)le32_to_cpu(get_hw_spec->wcb_base[i]),(void *)(uintptr_t)le32_to_cpu(get_hw_spec->wcb_base[i]),skb_queue_len(&pcie_priv->txq[i + 1]),pcie_priv->fw_desc_cnt[i + 1]);
 		spin_unlock_irqrestore(&pcie_priv->tx_desc_lock, flags);
 	}
 
@@ -550,9 +550,9 @@ static ssize_t mwl_debugfs_vif_read(struct file *file, char __user *ubuf,
 		switch (vif->type) {
 		case NL80211_IFTYPE_AP:
 			len += scnprintf(p + len, size - len, "type: ap\n");
-			memcpy(ssid, vif->bss_conf.ssid,
-			       vif->bss_conf.ssid_len);
-			ssid[vif->bss_conf.ssid_len] = 0;
+			memcpy(ssid, vif->cfg.ssid,
+			       vif->cfg.ssid_len);
+			ssid[vif->cfg.ssid_len] = 0;
 			len += scnprintf(p + len, size - len,
 					 "ssid: %s\n", ssid);
 			len += scnprintf(p + len, size - len,
@@ -574,8 +574,8 @@ static ssize_t mwl_debugfs_vif_read(struct file *file, char __user *ubuf,
 					 "type: unknown\n");
 			break;
 		}
-		if (vif->chanctx_conf) {
-			chan_def = &vif->chanctx_conf->def;
+		if (vif->bss_conf.chanctx_conf) {
+			chan_def = &vif->bss_conf.chanctx_conf->def;
 			len += scnprintf(p + len, size - len,
 					 "channel: %d: width: %d\n",
 					 chan_def->chan->hw_value,
@@ -648,18 +648,18 @@ static ssize_t mwl_debugfs_sta_read(struct file *file, char __user *ubuf,
 			sta_info->wds ? "true" : "false",
 			sta_info->ba_hist.enable ? "enable" : "disable",
 			sta_info->is_amsdu_allowed ? sta_info->amsdu_ctrl.cap : 0 ,
-			sta->ht_cap.ht_supported ? sta->ht_cap.cap : 0,
-			sta->ht_cap.ht_supported ? sta->ht_cap.ampdu_factor : 0,
-			sta->ht_cap.ht_supported ? sta->ht_cap.ampdu_density : 0,
-			sta->ht_cap.ht_supported ? sta->ht_cap.mcs.rx_mask[0] : 0,
-			sta->ht_cap.ht_supported ? sta->ht_cap.mcs.rx_mask[1] : 0,
-			sta->ht_cap.ht_supported ? sta->ht_cap.mcs.rx_mask[2] : 0,
-			sta->ht_cap.ht_supported ? sta->ht_cap.mcs.rx_mask[3] : 0,
-			sta->vht_cap.vht_supported ? sta->vht_cap.cap : 0,
-			sta->vht_cap.vht_supported ? sta->vht_cap.vht_mcs.rx_mcs_map : 0,
-			sta->vht_cap.vht_supported ? sta->vht_cap.vht_mcs.tx_mcs_map : 0,
-			sta->bandwidth,
-			sta->rx_nss,
+			sta->deflink.ht_cap.ht_supported ? sta->deflink.ht_cap.cap : 0,
+			sta->deflink.ht_cap.ht_supported ? sta->deflink.ht_cap.ampdu_factor : 0,
+			sta->deflink.ht_cap.ht_supported ? sta->deflink.ht_cap.ampdu_density : 0,
+			sta->deflink.ht_cap.ht_supported ? sta->deflink.ht_cap.mcs.rx_mask[0] : 0,
+			sta->deflink.ht_cap.ht_supported ? sta->deflink.ht_cap.mcs.rx_mask[1] : 0,
+			sta->deflink.ht_cap.ht_supported ? sta->deflink.ht_cap.mcs.rx_mask[2] : 0,
+			sta->deflink.ht_cap.ht_supported ? sta->deflink.ht_cap.mcs.rx_mask[3] : 0,
+			sta->deflink.vht_cap.vht_supported ? sta->deflink.vht_cap.cap : 0,
+			sta->deflink.vht_cap.vht_supported ? sta->deflink.vht_cap.vht_mcs.rx_mcs_map : 0,
+			sta->deflink.vht_cap.vht_supported ? sta->deflink.vht_cap.vht_mcs.tx_mcs_map : 0,
+			sta->deflink.bandwidth,
+			sta->deflink.rx_nss,
 			sta->tdls,
 			sta->tdls_initiator,
 			sta->wme,
@@ -1210,7 +1210,7 @@ static ssize_t mwl_debugfs_dfs_radar_write(struct file *file,
 	struct mwl_priv *priv = (struct mwl_priv *)file->private_data;
 
 	wiphy_info(priv->hw->wiphy, "simulate radar detected\n");
-	ieee80211_radar_detected(priv->hw);
+	ieee80211_radar_detected(priv->hw, NULL);
 
 	return count;
 }
@@ -1394,7 +1394,7 @@ done:
 				 priv->reg_value);
 	else
 		len += scnprintf(p + len, size - len,
-				 "error: %d(%u 0x%08x 0x%08x)\n",
+				 "error: %zd(%u 0x%08x 0x%08x)\n",
 				 ret, priv->reg_type, priv->reg_offset,
 				 priv->reg_value);
 

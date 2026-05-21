@@ -478,7 +478,7 @@ static void pcie_non_pfu_tx_done(struct mwl_priv *priv)
 			} else
 				memmove(dma_data->data - hdrlen, &dma_data->wh, hdrlen);
 			skb_pull(done_skb, sizeof(*dma_data) - hdrlen);
-			ieee80211_tx_status(priv->hw, done_skb);
+			ieee80211_tx_status_skb(priv->hw, done_skb);
 next:
 			tx_hndl = tx_hndl->pnext;
 			tx_desc = tx_hndl->pdesc;
@@ -730,7 +730,7 @@ void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
 	index = SYSADPT_TX_WMM_QUEUES - index - 1;
 	txpriority = index;
 
-	if (sta && sta->ht_cap.ht_supported &&
+	if (sta && sta->deflink.ht_cap.ht_supported &&
 	  !(xmitcontrol & EAGLE_TXD_XMITCTRL_USE_MC_RATE) &&
 	    ieee80211_is_data_qos(wh->frame_control)) {
 		tid = qos & 0xf;

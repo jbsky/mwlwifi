@@ -81,7 +81,7 @@ static int pcie_txbd_ring_create(struct mwl_priv *priv)
 	wiphy_info(priv->hw->wiphy,
 		   "TX ring: - base: %p, pbase: 0x%x, len: %d\n",
 		   pcie_priv->txbd_ring_vbase,
-		   pcie_priv->txbd_ring_pbase,
+		   (u32)pcie_priv->txbd_ring_pbase,
 		   pcie_priv->txbd_ring_size);
 
 	for (num = 0; num < PCIE_MAX_TXRX_BD; num++) {
@@ -431,7 +431,7 @@ static void pcie_pfu_tx_done(struct mwl_priv *priv)
 			} else
 				memmove(dma_data->data - hdrlen, &dma_data->wh, hdrlen);
 			skb_pull(done_skb, sizeof(*pfu_dma) - hdrlen);
-			ieee80211_tx_status(priv->hw, done_skb);
+			ieee80211_tx_status_skb(priv->hw, done_skb);
 		}
 next:
 		memset(data_buf, 0, sizeof(*data_buf));
@@ -682,7 +682,7 @@ void pcie_8997_tx_xmit(struct ieee80211_hw *hw,
 	index = SYSADPT_TX_WMM_QUEUES - index - 1;
 	txpriority = index;
 
-	if (sta && sta->ht_cap.ht_supported &&
+	if (sta && sta->deflink.ht_cap.ht_supported &&
 	  !(xmitcontrol & EAGLE_TXD_XMITCTRL_USE_MC_RATE) &&
 	    ieee80211_is_data_qos(wh->frame_control)) {
 		tid = qos & 0xf;
