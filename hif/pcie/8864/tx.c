@@ -647,6 +647,21 @@ void pcie_8864_tx_xmit(struct ieee80211_hw *hw,
 	tx_info = IEEE80211_SKB_CB(skb);
 	mwl_vif = mwl_dev_get_vif(tx_info->control.vif);
 
+	/* The 88W8864 firmware buffers multicast/broadcast data for DTIM
+	 * release, but never actually releases them on mesh BSS.  Work
+	 * around by treating multicast/broadcast mesh data as management:
+	 * this sets type=0 in the TX descriptor and zeroes xmitcontrol/qos,
+	 * which together cause the firmware to bypass DTIM buffering and
+	 * transmit the frame immediately.  Encryption still works (GTK via
+	 * Protected bit and CCMP header in the frame).
+	 */
+	if (tx_info->control.vif &&
+	    tx_info->control.vif->type == NL80211_IFTYPE_MESH_POINT &&
+	    is_multicast_ether_addr(wh->addr1) &&
+	    ieee80211_is_data(wh->frame_control)) {
+		mgmtframe = true;
+	}
+
 	if (ieee80211_is_data_qos(wh->frame_control))
 		qos = le16_to_cpu(*((__le16 *)ieee80211_get_qos_ctl(wh)));
 	else
