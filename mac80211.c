@@ -190,8 +190,7 @@ static int mwl_mac80211_add_interface(struct ieee80211_hw *hw,
 	case NL80211_IFTYPE_AP:
 	case NL80211_IFTYPE_MESH_POINT:
 		if (vif->type == NL80211_IFTYPE_MESH_POINT)
-			if (priv->chip_type != MWL8997)
-				return -EPERM;
+
 		macids_supported = priv->ap_macids_supported;
 		break;
 	case NL80211_IFTYPE_STATION:
@@ -316,13 +315,15 @@ static int mwl_mac80211_config(struct ieee80211_hw *hw,
 
 	wiphy_debug(hw->wiphy, "change: 0x%x\n", changed);
 
-	if (conf->flags & IEEE80211_CONF_IDLE)
-		rc = mwl_fwcmd_radio_disable(hw);
-	else
+	/* Always enable radio when not IDLE, but never disable it.
+	 * mac80211 may spuriously set IDLE during interface reconfiguration
+	 * at boot while interfaces are still active (race condition).
+	 */
+	if (!(conf->flags & IEEE80211_CONF_IDLE)) {
 		rc = mwl_fwcmd_radio_enable(hw);
-
-	if (rc)
-		goto out;
+		if (rc)
+			goto out;
+	}
 
 	if (changed & IEEE80211_CONF_CHANGE_CHANNEL) {
 		int rate = 0;
@@ -470,14 +471,11 @@ static void mwl_mac80211_bss_info_changed_ap(struct ieee80211_hw *hw,
 			}
 		}
 
-		if (!mwl_vif->set_beacon) {
-			skb = ieee80211_beacon_get(hw, vif, 0);
+		skb = ieee80211_beacon_get(hw, vif, 0);
 
-			if (skb) {
-				mwl_fwcmd_set_beacon(hw, vif, skb->data, skb->len);
-				dev_kfree_skb_any(skb);
-			}
-			mwl_vif->set_beacon = true;
+		if (skb) {
+			mwl_fwcmd_set_beacon(hw, vif, skb->data, skb->len);
+			dev_kfree_skb_any(skb);
 		}
 	}
 

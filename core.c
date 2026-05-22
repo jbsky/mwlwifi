@@ -126,10 +126,9 @@ static const u32 cipher_suites_8964[] = {
 };
 
 static const struct ieee80211_iface_limit ap_if_limits[] = {
-	{ .max = SYSADPT_NUM_OF_AP, .types = BIT(NL80211_IFTYPE_AP) },
-#if defined(CPTCFG_MAC80211_MESH) || defined(CONFIG_MAC80211_MESH)
-	{ .max = SYSADPT_NUM_OF_MESH, .types = BIT(NL80211_IFTYPE_MESH_POINT) },
-#endif
+	{ .max = SYSADPT_NUM_OF_AP,
+	  .types = BIT(NL80211_IFTYPE_AP) |
+		   BIT(NL80211_IFTYPE_MESH_POINT) },
 	{ .max = SYSADPT_NUM_OF_CLIENT, .types = BIT(NL80211_IFTYPE_STATION) },
 };
 

@@ -672,7 +672,19 @@ static int mwl_fwcmd_set_ap_beacon(struct mwl_priv *priv,
 	pcmd->cmd_hdr.macid = mwl_vif->macid;
 
 	ether_addr_copy(pcmd->start_cmd.sta_mac_addr, mwl_vif->bssid);
-	memcpy(pcmd->start_cmd.ssid, vif->cfg.ssid, vif->cfg.ssid_len);
+	if (vif->type == NL80211_IFTYPE_MESH_POINT &&
+	    mwl_vif->beacon_info.ie_meshid_len > 2) {
+		/* Use Mesh ID as SSID so firmware enables TIM/multicast
+		 * release.  Without a non-empty SSID the 88W8864 firmware
+		 * never inserts a TIM IE and buffered multicast/broadcast
+		 * is stuck forever.
+		 */
+		memcpy(pcmd->start_cmd.ssid,
+		       mwl_vif->beacon_info.ie_meshid_ptr + 2,
+		       mwl_vif->beacon_info.ie_meshid_len - 2);
+	} else {
+		memcpy(pcmd->start_cmd.ssid, vif->cfg.ssid, vif->cfg.ssid_len);
+	}
 	if (priv->chip_type == MWL8997)
 		ether_addr_copy(pcmd->start_cmd.bssid, mwl_vif->bssid);
 	pcmd->start_cmd.bss_type = 1;
@@ -685,7 +697,12 @@ static int mwl_fwcmd_set_ap_beacon(struct mwl_priv *priv,
 	phy_ds_param_set->current_chnl = bss_conf->chanreq.oper.chan->hw_value;
 
 	pcmd->start_cmd.probe_delay = cpu_to_le16(10);
-	pcmd->start_cmd.cap_info = cpu_to_le16(mwl_vif->beacon_info.cap_info);
+	if (vif->type == NL80211_IFTYPE_MESH_POINT)
+		pcmd->start_cmd.cap_info = cpu_to_le16(
+			mwl_vif->beacon_info.cap_info | WLAN_CAPABILITY_ESS);
+	else
+		pcmd->start_cmd.cap_info =
+			cpu_to_le16(mwl_vif->beacon_info.cap_info);
 
 	memcpy(&pcmd->start_cmd.wmm_param, mwl_vif->beacon_info.ie_wmm_ptr,
 	       mwl_vif->beacon_info.ie_wmm_len);

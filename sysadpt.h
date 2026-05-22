@@ -46,7 +46,7 @@
 
 #define SYSADPT_NUM_OF_AP              16
 
-#define SYSADPT_NUM_OF_MESH            1
+#define SYSADPT_NUM_OF_MESH            3
 
 #define SYSADPT_TOTAL_TX_QUEUES        (SYSADPT_TX_WMM_QUEUES + \
 					SYSADPT_NUM_OF_AP)
