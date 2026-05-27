@@ -362,38 +362,6 @@ struct mwl_priv {
 	u32 feature;
 };
 
-struct beacon_info {
-	bool valid;
-	u16 cap_info;
-	u8 power_constraint;
-	u8 b_rate_set[SYSADPT_MAX_DATA_RATES_G];
-	u8 op_rate_set[SYSADPT_MAX_DATA_RATES_G];
-	u8 ie_list_ht[148];
-	u8 ie_list_vht[24];
-	u8 *ie_wmm_ptr;
-	u8 *ie_wsc_ptr;
-	u8 *ie_rsn_ptr;
-	u8 *ie_rsn48_ptr;
-	u8 *ie_mde_ptr;
-	u8 *ie_ht_ptr;
-	u8 *ie_vht_ptr;
-	u8 *ie_country_ptr;
-	u8 *ie_meshid_ptr;
-	u8 *ie_meshcfg_ptr;
-	u8 *ie_meshchsw_ptr;
-	u8 ie_wmm_len;
-	u8 ie_wsc_len;
-	u8 ie_rsn_len;
-	u8 ie_rsn48_len;
-	u8 ie_mde_len;
-	u8 ie_ht_len;
-	u8 ie_vht_len;
-	u8 ie_country_len;
-	u8 ie_meshid_len;
-	u8 ie_meshcfg_len;
-	u8 ie_meshchsw_len;
-};
-
 struct mwl_vif {
 	struct list_head list;
 	enum nl80211_iftype type;
@@ -405,13 +373,15 @@ struct mwl_vif {
 	} wep_key_conf[NUM_WEP_KEYS];
 	u8 bssid[ETH_ALEN];          /* BSSID */
 	u8 sta_mac[ETH_ALEN];        /* Station mac address */
-	/* A flag to indicate is HW crypto is enabled for this bssid */
 	bool is_hw_crypto_enabled;
-	/* Indicate if this is station mode */
-	struct beacon_info beacon_info;
-	bool set_beacon;
 	int basic_rate_idx;
 	u8 broadcast_ssid;
+
+	/* Driver-forged beacon TX (bypass firmware beacon generation) */
+	struct ieee80211_hw *hw;
+	struct delayed_work beacon_work;
+	bool beacon_enabled;
+	unsigned long last_bss_refresh;
 };
 
 struct mwl_tx_info {

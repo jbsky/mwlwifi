@@ -62,7 +62,6 @@ char *mwl_fwcmd_get_cmd_string(unsigned short cmd)
 		{ HOSTCMD_CMD_SET_WMM_MODE, "SetWMMMode" },
 		{ HOSTCMD_CMD_HT_GUARD_INTERVAL, "HtGuardInterval" },
 		{ HOSTCMD_CMD_SET_FIXED_RATE, "SetFixedRate" },
-		{ HOSTCMD_CMD_SET_IES, "SetInformationElements" },
 		{ HOSTCMD_CMD_SET_LINKADAPT_CS_MODE, "LinkAdaptCsMode" },
 		{ HOSTCMD_CMD_DUMP_OTP_DATA, "DumpOtpData" },
 		{ HOSTCMD_CMD_SET_MAC_ADDR, "SetMacAddr" },
@@ -80,7 +79,6 @@ char *mwl_fwcmd_get_cmd_string(unsigned short cmd)
 		{ HOSTCMD_CMD_SET_POWER_CONSTRAINT, "SetPowerConstraint" },
 		{ HOSTCMD_CMD_SET_COUNTRY_CODE, "SetCountryCode" },
 		{ HOSTCMD_CMD_SET_OPTIMIZATION_LEVEL, "SetOptimizationLevel" },
-		{ HOSTCMD_CMD_SET_WSC_IE, "SetWscIE" },
 		{ HOSTCMD_CMD_GET_RATETABLE, "GetRateTable" },
 		{ HOSTCMD_CMD_GET_SEQNO, "GetSeqno" },
 		{ HOSTCMD_CMD_DWDS_ENABLE, "DwdsEnable" },
@@ -394,250 +392,13 @@ static u8 mwl_fwcmd_get_160m_pri_chnl(u8 channel)
 	return act_primary;
 }
 
-static void mwl_fwcmd_parse_beacon(struct mwl_priv *priv,
-				   struct mwl_vif *vif, u8 *beacon, int len)
-{
-	struct ieee80211_mgmt *mgmt;
-	struct beacon_info *beacon_info;
-	int baselen;
-	u8 *pos;
-	size_t left;
-	bool elem_parse_failed;
-
-	mgmt = (struct ieee80211_mgmt *)beacon;
-
-	baselen = (u8 *)mgmt->u.beacon.variable - (u8 *)mgmt;
-	if (baselen > len)
-		return;
-
-	beacon_info = &vif->beacon_info;
-	memset(beacon_info, 0, sizeof(struct beacon_info));
-	beacon_info->valid = false;
-	beacon_info->ie_ht_ptr = &beacon_info->ie_list_ht[0];
-	beacon_info->ie_vht_ptr = &beacon_info->ie_list_vht[0];
-
-	beacon_info->cap_info = le16_to_cpu(mgmt->u.beacon.capab_info);
-	beacon_info->power_constraint = 0;
-
-	pos = (u8 *)mgmt->u.beacon.variable;
-	left = len - baselen;
-
-	elem_parse_failed = false;
-
-	while (left >= 2) {
-		u8 id, elen;
-
-		id = *pos++;
-		elen = *pos++;
-		left -= 2;
-
-		if (elen > left) {
-			elem_parse_failed = true;
-			break;
-		}
-
-		switch (id) {
-		case WLAN_EID_COUNTRY:
-			beacon_info->ie_country_len = (elen + 2);
-			beacon_info->ie_country_ptr = (pos - 2);
-			break;
-		case WLAN_EID_SUPP_RATES:
-		case WLAN_EID_EXT_SUPP_RATES:
-			{
-			int idx, bi, oi;
-			u8 rate;
-
-			for (bi = 0; bi < SYSADPT_MAX_DATA_RATES_G;
-			     bi++) {
-				if (beacon_info->b_rate_set[bi] == 0)
-					break;
-			}
-
-			for (oi = 0; oi < SYSADPT_MAX_DATA_RATES_G;
-			     oi++) {
-				if (beacon_info->op_rate_set[oi] == 0)
-					break;
-			}
-
-			for (idx = 0; idx < elen; idx++) {
-				rate = pos[idx];
-				if ((rate & 0x80) != 0) {
-					if (bi < SYSADPT_MAX_DATA_RATES_G)
-						beacon_info->b_rate_set[bi++]
-							= rate & 0x7f;
-					else {
-						elem_parse_failed = true;
-						break;
-					}
-				}
-				if (oi < SYSADPT_MAX_DATA_RATES_G)
-					beacon_info->op_rate_set[oi++] =
-						rate & 0x7f;
-				else {
-					elem_parse_failed = true;
-					break;
-				}
-			}
-			}
-			break;
-		case WLAN_EID_PWR_CONSTRAINT:
-			if (elen == 1)
-				beacon_info->power_constraint = *pos;
-			break;
-		case WLAN_EID_RSN:
-			beacon_info->ie_rsn48_len = (elen + 2);
-			beacon_info->ie_rsn48_ptr = (pos - 2);
-			break;
-		case WLAN_EID_MOBILITY_DOMAIN:
-			beacon_info->ie_mde_len = (elen + 2);
-			beacon_info->ie_mde_ptr = (pos - 2);
-			break;
-		case WLAN_EID_HT_CAPABILITY:
-		case WLAN_EID_HT_OPERATION:
-		case WLAN_EID_OVERLAP_BSS_SCAN_PARAM:
-		case WLAN_EID_EXT_CAPABILITY:
-			beacon_info->ie_ht_len += (elen + 2);
-			if (beacon_info->ie_ht_len >
-			    sizeof(beacon_info->ie_list_ht)) {
-				elem_parse_failed = true;
-			} else {
-				*beacon_info->ie_ht_ptr++ = id;
-				*beacon_info->ie_ht_ptr++ = elen;
-				memcpy(beacon_info->ie_ht_ptr, pos, elen);
-				beacon_info->ie_ht_ptr += elen;
-			}
-			break;
-		case WLAN_EID_MESH_CONFIG:
-			beacon_info->ie_meshcfg_len = (elen + 2);
-			beacon_info->ie_meshcfg_ptr = (pos - 2);
-			break;
-		case WLAN_EID_MESH_ID:
-			beacon_info->ie_meshid_len = (elen + 2);
-			beacon_info->ie_meshid_ptr = (pos - 2);
-			break;
-		case WLAN_EID_CHAN_SWITCH_PARAM:
-			beacon_info->ie_meshchsw_len = (elen + 2);
-			beacon_info->ie_meshchsw_ptr = (pos - 2);
-			break;
-		case WLAN_EID_VHT_CAPABILITY:
-		case WLAN_EID_VHT_OPERATION:
-		case WLAN_EID_OPMODE_NOTIF:
-			beacon_info->ie_vht_len += (elen + 2);
-			if (beacon_info->ie_vht_len >
-			    sizeof(beacon_info->ie_list_vht)) {
-				elem_parse_failed = true;
-			} else {
-				*beacon_info->ie_vht_ptr++ = id;
-				*beacon_info->ie_vht_ptr++ = elen;
-				memcpy(beacon_info->ie_vht_ptr, pos, elen);
-				beacon_info->ie_vht_ptr += elen;
-			}
-			break;
-		case WLAN_EID_VENDOR_SPECIFIC:
-			if ((pos[0] == 0x00) && (pos[1] == 0x50) &&
-			    (pos[2] == 0xf2)) {
-				if (pos[3] == 0x01) {
-					beacon_info->ie_rsn_len = (elen + 2);
-					beacon_info->ie_rsn_ptr = (pos - 2);
-				}
-
-				if (pos[3] == 0x02) {
-					beacon_info->ie_wmm_len = (elen + 2);
-					beacon_info->ie_wmm_ptr = (pos - 2);
-				}
-
-				if (pos[3] == 0x04) {
-					beacon_info->ie_wsc_len = (elen + 2);
-					beacon_info->ie_wsc_ptr = (pos - 2);
-				}
-			}
-			break;
-		default:
-			break;
-		}
-
-		left -= elen;
-		pos += elen;
-	}
-
-	if (!elem_parse_failed) {
-		beacon_info->ie_ht_ptr = &beacon_info->ie_list_ht[0];
-		beacon_info->ie_vht_ptr = &beacon_info->ie_list_vht[0];
-		beacon_info->valid = true;
-	}
-}
-
-static int mwl_fwcmd_set_ies(struct mwl_priv *priv, struct mwl_vif *mwl_vif)
-{
-	struct hostcmd_cmd_set_ies *pcmd;
-	struct beacon_info *beacon = &mwl_vif->beacon_info;
-	u16 ie_list_len_proprietary = 0;
-
-	if (beacon->ie_ht_len > sizeof(pcmd->ie_list_ht))
-		goto einval;
-
-	if (beacon->ie_vht_len > sizeof(pcmd->ie_list_vht))
-		goto einval;
-
-	pcmd = (struct hostcmd_cmd_set_ies *)&priv->pcmd_buf[0];
-
-	mutex_lock(&priv->fwcmd_mutex);
-
-	memset(pcmd, 0x00, sizeof(*pcmd));
-	pcmd->cmd_hdr.cmd = cpu_to_le16(HOSTCMD_CMD_SET_IES);
-	pcmd->cmd_hdr.len = cpu_to_le16(sizeof(*pcmd));
-	pcmd->cmd_hdr.macid = mwl_vif->macid;
-
-	pcmd->action = cpu_to_le16(HOSTCMD_ACT_GEN_SET);
-
-	memcpy(pcmd->ie_list_ht, beacon->ie_ht_ptr, beacon->ie_ht_len);
-	pcmd->ie_list_len_ht = cpu_to_le16(beacon->ie_ht_len);
-
-	memcpy(pcmd->ie_list_vht, beacon->ie_vht_ptr, beacon->ie_vht_len);
-	pcmd->ie_list_len_vht = cpu_to_le16(beacon->ie_vht_len);
-
-	memcpy(pcmd->ie_list_proprietary, beacon->ie_meshid_ptr,
-	       beacon->ie_meshid_len);
-	ie_list_len_proprietary = beacon->ie_meshid_len;
-
-	memcpy(pcmd->ie_list_proprietary + ie_list_len_proprietary,
-	       beacon->ie_meshcfg_ptr, beacon->ie_meshcfg_len);
-	ie_list_len_proprietary += beacon->ie_meshcfg_len;
-
-	memcpy(pcmd->ie_list_proprietary + ie_list_len_proprietary,
-	       beacon->ie_meshchsw_ptr, beacon->ie_meshchsw_len);
-	ie_list_len_proprietary += beacon->ie_meshchsw_len;
-
-	if (priv->chip_type == MWL8897) {
-		memcpy(pcmd->ie_list_proprietary + ie_list_len_proprietary,
-		       beacon->ie_wmm_ptr, beacon->ie_wmm_len);
-		ie_list_len_proprietary += mwl_vif->beacon_info.ie_wmm_len;
-	}
-
-	memcpy(pcmd->ie_list_proprietary + ie_list_len_proprietary,
-	       beacon->ie_mde_ptr, beacon->ie_mde_len);
-	ie_list_len_proprietary += mwl_vif->beacon_info.ie_mde_len;
-
-	pcmd->ie_list_len_proprietary = cpu_to_le16(ie_list_len_proprietary);
-
-	if (mwl_hif_exec_cmd(priv->hw, HOSTCMD_CMD_SET_IES)) {
-		mutex_unlock(&priv->fwcmd_mutex);
-		return -EIO;
-	}
-
-	mutex_unlock(&priv->fwcmd_mutex);
-
-	return 0;
-
-einval:
-
-	wiphy_err(priv->hw->wiphy, "length of IE is too long\n");
-
-	return -EINVAL;
-}
-
-static int mwl_fwcmd_set_ap_beacon(struct mwl_priv *priv,
-				   struct ieee80211_vif *vif)
+/* Register BSS MAC in firmware for hardware ACK generation.
+ * Sends AP_BEACON (0x1101) with bcn_period=0 so the firmware does NOT
+ * generate autonomous beacons but DOES register the BSS MAC in its ACK
+ * filter table and programs per-macid TX parameters.
+ */
+static int mwl_fwcmd_register_bss(struct mwl_priv *priv,
+				  struct ieee80211_vif *vif)
 {
 	struct hostcmd_cmd_ap_beacon *pcmd;
 	struct ds_params *phy_ds_param_set;
@@ -646,21 +407,6 @@ static int mwl_fwcmd_set_ap_beacon(struct mwl_priv *priv,
 
 	mwl_vif = mwl_dev_get_vif(vif);
 	bss_conf = &vif->bss_conf;
-
-	/* wmm structure of start command is defined less one byte,
-	 * due to following field country is not used, add byte one
-	 * to bypass the check.
-	 */
-	if (mwl_vif->beacon_info.ie_wmm_len >
-	    (sizeof(pcmd->start_cmd.wmm_param) + 1))
-		goto ielenerr;
-
-	if (mwl_vif->beacon_info.ie_rsn_len > sizeof(pcmd->start_cmd.rsn_ie))
-		goto ielenerr;
-
-	if (mwl_vif->beacon_info.ie_rsn48_len >
-	    sizeof(pcmd->start_cmd.rsn48_ie))
-		goto ielenerr;
 
 	pcmd = (struct hostcmd_cmd_ap_beacon *)&priv->pcmd_buf[0];
 
@@ -672,52 +418,19 @@ static int mwl_fwcmd_set_ap_beacon(struct mwl_priv *priv,
 	pcmd->cmd_hdr.macid = mwl_vif->macid;
 
 	ether_addr_copy(pcmd->start_cmd.sta_mac_addr, mwl_vif->bssid);
-	if (vif->type == NL80211_IFTYPE_MESH_POINT &&
-	    mwl_vif->beacon_info.ie_meshid_len > 2) {
-		/* Use Mesh ID as SSID so firmware enables TIM/multicast
-		 * release.  Without a non-empty SSID the 88W8864 firmware
-		 * never inserts a TIM IE and buffered multicast/broadcast
-		 * is stuck forever.
-		 */
-		memcpy(pcmd->start_cmd.ssid,
-		       mwl_vif->beacon_info.ie_meshid_ptr + 2,
-		       mwl_vif->beacon_info.ie_meshid_len - 2);
-	} else {
-		memcpy(pcmd->start_cmd.ssid, vif->cfg.ssid, vif->cfg.ssid_len);
-	}
+	memcpy(pcmd->start_cmd.ssid, vif->cfg.ssid, vif->cfg.ssid_len);
 	if (priv->chip_type == MWL8997)
 		ether_addr_copy(pcmd->start_cmd.bssid, mwl_vif->bssid);
 	pcmd->start_cmd.bss_type = 1;
-	pcmd->start_cmd.bcn_period  = cpu_to_le16(bss_conf->beacon_int);
-	pcmd->start_cmd.dtim_period = bss_conf->dtim_period; /* 8bit */
+	pcmd->start_cmd.bcn_period = cpu_to_le16(0);
+	pcmd->start_cmd.dtim_period = bss_conf->dtim_period;
 
 	phy_ds_param_set = &pcmd->start_cmd.phy_param_set.ds_param_set;
 	phy_ds_param_set->elem_id = WLAN_EID_DS_PARAMS;
 	phy_ds_param_set->len = sizeof(phy_ds_param_set->current_chnl);
 	phy_ds_param_set->current_chnl = bss_conf->chanreq.oper.chan->hw_value;
 
-	pcmd->start_cmd.probe_delay = cpu_to_le16(10);
-	if (vif->type == NL80211_IFTYPE_MESH_POINT)
-		pcmd->start_cmd.cap_info = cpu_to_le16(
-			mwl_vif->beacon_info.cap_info | WLAN_CAPABILITY_ESS);
-	else
-		pcmd->start_cmd.cap_info =
-			cpu_to_le16(mwl_vif->beacon_info.cap_info);
-
-	memcpy(&pcmd->start_cmd.wmm_param, mwl_vif->beacon_info.ie_wmm_ptr,
-	       mwl_vif->beacon_info.ie_wmm_len);
-
-	memcpy(&pcmd->start_cmd.rsn_ie, mwl_vif->beacon_info.ie_rsn_ptr,
-	       mwl_vif->beacon_info.ie_rsn_len);
-
-	memcpy(&pcmd->start_cmd.rsn48_ie, mwl_vif->beacon_info.ie_rsn48_ptr,
-	       mwl_vif->beacon_info.ie_rsn48_len);
-
-	memcpy(pcmd->start_cmd.b_rate_set, mwl_vif->beacon_info.b_rate_set,
-	       SYSADPT_MAX_DATA_RATES_G);
-
-	memcpy(pcmd->start_cmd.op_rate_set, mwl_vif->beacon_info.op_rate_set,
-	       SYSADPT_MAX_DATA_RATES_G);
+	pcmd->start_cmd.cap_info = cpu_to_le16(WLAN_CAPABILITY_ESS);
 
 	if (mwl_hif_exec_cmd(priv->hw, HOSTCMD_CMD_AP_BEACON)) {
 		mutex_unlock(&priv->fwcmd_mutex);
@@ -727,124 +440,8 @@ static int mwl_fwcmd_set_ap_beacon(struct mwl_priv *priv,
 	mutex_unlock(&priv->fwcmd_mutex);
 
 	return 0;
-
-ielenerr:
-
-	wiphy_err(priv->hw->wiphy, "length of IE is too long\n");
-
-	return -EINVAL;
 }
 
-static int mwl_fwcmd_set_spectrum_mgmt(struct mwl_priv *priv, bool enable)
-{
-	struct hostcmd_cmd_set_spectrum_mgmt *pcmd;
-
-	pcmd = (struct hostcmd_cmd_set_spectrum_mgmt *)&priv->pcmd_buf[0];
-
-	mutex_lock(&priv->fwcmd_mutex);
-
-	memset(pcmd, 0x00, sizeof(*pcmd));
-	pcmd->cmd_hdr.cmd = cpu_to_le16(HOSTCMD_CMD_SET_SPECTRUM_MGMT);
-	pcmd->cmd_hdr.len = cpu_to_le16(sizeof(*pcmd));
-	pcmd->spectrum_mgmt = cpu_to_le32(enable);
-
-	if (mwl_hif_exec_cmd(priv->hw, HOSTCMD_CMD_SET_SPECTRUM_MGMT)) {
-		mutex_unlock(&priv->fwcmd_mutex);
-		return -EIO;
-	}
-
-	mutex_unlock(&priv->fwcmd_mutex);
-
-	return 0;
-}
-
-static int mwl_fwcmd_set_power_constraint(struct mwl_priv *priv,
-					  u32 power_constraint)
-{
-	struct hostcmd_cmd_set_power_constraint *pcmd;
-
-	pcmd = (struct hostcmd_cmd_set_power_constraint *)&priv->pcmd_buf[0];
-
-	mutex_lock(&priv->fwcmd_mutex);
-
-	memset(pcmd, 0x00, sizeof(*pcmd));
-	pcmd->cmd_hdr.cmd = cpu_to_le16(HOSTCMD_CMD_SET_POWER_CONSTRAINT);
-	pcmd->cmd_hdr.len = cpu_to_le16(sizeof(*pcmd));
-	pcmd->power_constraint = cpu_to_le32(power_constraint);
-
-	if (mwl_hif_exec_cmd(priv->hw, HOSTCMD_CMD_SET_POWER_CONSTRAINT)) {
-		mutex_unlock(&priv->fwcmd_mutex);
-		return -EIO;
-	}
-
-	mutex_unlock(&priv->fwcmd_mutex);
-
-	return 0;
-}
-
-static int mwl_fwcmd_set_country_code(struct mwl_priv *priv,
-				      struct mwl_vif *mwl_vif,
-				      struct ieee80211_bss_conf *bss_conf)
-{
-	struct hostcmd_cmd_set_country_code *pcmd;
-	struct beacon_info *b_inf = &mwl_vif->beacon_info;
-	u8 chnl_len;
-	bool a_band;
-	bool enable = false;
-
-	if (b_inf->ie_country_ptr) {
-		if (bss_conf->chanreq.oper.chan->band == NL80211_BAND_2GHZ)
-			a_band = false;
-		else if (bss_conf->chanreq.oper.chan->band == NL80211_BAND_5GHZ)
-			a_band = true;
-		else
-			return -EINVAL;
-
-		chnl_len = b_inf->ie_country_len - 5;
-		if (a_band) {
-			if (chnl_len > sizeof(pcmd->domain_info.domain_entry_a))
-				return -EINVAL;
-		} else {
-			if (chnl_len > sizeof(pcmd->domain_info.domain_entry_g))
-				return -EINVAL;
-		}
-
-		enable = true;
-	}
-
-	pcmd = (struct hostcmd_cmd_set_country_code *)&priv->pcmd_buf[0];
-
-	mutex_lock(&priv->fwcmd_mutex);
-
-	memset(pcmd, 0x00, sizeof(*pcmd));
-	pcmd->cmd_hdr.cmd = cpu_to_le16(HOSTCMD_CMD_SET_COUNTRY_CODE);
-	pcmd->cmd_hdr.len = cpu_to_le16(sizeof(*pcmd));
-	pcmd->action = cpu_to_le32(enable);
-	if (enable) {
-		memcpy(pcmd->domain_info.country_string,
-		       b_inf->ie_country_ptr + 2, 3);
-		if (a_band) {
-			pcmd->domain_info.g_chnl_len = 0;
-			pcmd->domain_info.a_chnl_len = chnl_len;
-			memcpy(pcmd->domain_info.domain_entry_a,
-			       b_inf->ie_country_ptr + 5, chnl_len);
-		} else {
-			pcmd->domain_info.a_chnl_len = 0;
-			pcmd->domain_info.g_chnl_len = chnl_len;
-			memcpy(pcmd->domain_info.domain_entry_g,
-			       b_inf->ie_country_ptr + 5, chnl_len);
-		}
-	}
-
-	if (mwl_hif_exec_cmd(priv->hw, HOSTCMD_CMD_SET_COUNTRY_CODE)) {
-		mutex_unlock(&priv->fwcmd_mutex);
-		return -EIO;
-	}
-
-	mutex_unlock(&priv->fwcmd_mutex);
-
-	return 0;
-}
 
 static int mwl_fwcmd_encryption_set_cmd_info(struct hostcmd_cmd_set_key *cmd,
 					     u8 *addr,
@@ -2120,52 +1717,8 @@ int mwl_fwcmd_set_beacon(struct ieee80211_hw *hw,
 			 struct ieee80211_vif *vif, u8 *beacon, int len)
 {
 	struct mwl_priv *priv = hw->priv;
-	struct mwl_vif *mwl_vif;
-	struct beacon_info *b_inf;
-	int rc;
 
-	mwl_vif = mwl_dev_get_vif(vif);
-	b_inf = &mwl_vif->beacon_info;
-
-	mwl_fwcmd_parse_beacon(priv, mwl_vif, beacon, len);
-
-	if (!b_inf->valid)
-		goto err;
-
-	if (mwl_fwcmd_set_ies(priv, mwl_vif))
-		goto err;
-
-	if (mwl_fwcmd_set_wsc_ie(hw, b_inf->ie_wsc_len, b_inf->ie_wsc_ptr))
-		goto err;
-
-	if (mwl_fwcmd_set_ap_beacon(priv, vif))
-		goto err;
-
-	if (b_inf->cap_info & WLAN_CAPABILITY_SPECTRUM_MGMT)
-		rc = mwl_fwcmd_set_spectrum_mgmt(priv, true);
-	else
-		rc = mwl_fwcmd_set_spectrum_mgmt(priv, false);
-	if (rc)
-		goto err;
-
-	if (b_inf->power_constraint)
-		rc = mwl_fwcmd_set_power_constraint(priv,
-						    b_inf->power_constraint);
-	if (rc)
-		goto err;
-
-	if (mwl_fwcmd_set_country_code(priv, mwl_vif, &vif->bss_conf))
-		goto err;
-
-	b_inf->valid = false;
-
-	return 0;
-
-err:
-
-	b_inf->valid = false;
-
-	return -EIO;
+	return mwl_fwcmd_register_bss(priv, vif);
 }
 
 int mwl_fwcmd_set_new_stn_add(struct ieee80211_hw *hw,
@@ -3088,38 +2641,6 @@ int mwl_fwcmd_set_optimization_level(struct ieee80211_hw *hw, u8 opt_level)
 	pcmd->opt_level = opt_level;
 
 	if (mwl_hif_exec_cmd(hw, HOSTCMD_CMD_SET_OPTIMIZATION_LEVEL)) {
-		mutex_unlock(&priv->fwcmd_mutex);
-		return -EIO;
-	}
-
-	mutex_unlock(&priv->fwcmd_mutex);
-
-	return 0;
-}
-
-int mwl_fwcmd_set_wsc_ie(struct ieee80211_hw *hw, u8 len, u8 *data)
-{
-	struct mwl_priv *priv = hw->priv;
-	struct hostcmd_cmd_set_wsc_ie *pcmd;
-
-	pcmd = (struct hostcmd_cmd_set_wsc_ie *)&priv->pcmd_buf[0];
-
-	mutex_lock(&priv->fwcmd_mutex);
-
-	memset(pcmd, 0x00, sizeof(*pcmd));
-	pcmd->cmd_hdr.cmd = cpu_to_le16(HOSTCMD_CMD_SET_WSC_IE);
-	pcmd->cmd_hdr.len = cpu_to_le16(sizeof(*pcmd));
-	pcmd->len = cpu_to_le16(len);
-	memcpy(pcmd->data, data, len);
-
-	if (mwl_hif_exec_cmd(hw, HOSTCMD_CMD_SET_WSC_IE)) {
-		mutex_unlock(&priv->fwcmd_mutex);
-		return -EIO;
-	}
-
-	pcmd->ie_type = cpu_to_le16(WSC_IE_SET_PROBE_RESPONSE);
-
-	if (mwl_hif_exec_cmd(hw, HOSTCMD_CMD_SET_WSC_IE)) {
 		mutex_unlock(&priv->fwcmd_mutex);
 		return -EIO;
 	}

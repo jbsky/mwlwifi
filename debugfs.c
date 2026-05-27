@@ -59,8 +59,8 @@ static const char chipname[MWLUNKNOWN][8] = {
 	"88W8997"
 };
 
-static void dump_data(char *p, int size, int *len, u8 *data,
-		      int data_len, char *title)
+static void __maybe_unused dump_data(char *p, int size, int *len, u8 *data,
+				     int data_len, char *title)
 {
 	int cur_byte = 0;
 	int i;
@@ -535,7 +535,6 @@ static ssize_t mwl_debugfs_vif_read(struct file *file, char __user *ubuf,
 	struct ieee80211_vif *vif;
 	char ssid[IEEE80211_MAX_SSID_LEN + 1];
 	struct cfg80211_chan_def *chan_def;
-	struct beacon_info *beacon_info;
 	ssize_t ret;
 
 	if (!p)
@@ -589,27 +588,6 @@ static ssize_t mwl_debugfs_vif_read(struct file *file, char __user *ubuf,
 		len += scnprintf(p + len, size - len, "hw_crypto_enabled: %s\n",
 				 mwl_vif->is_hw_crypto_enabled ?
 				 "true" : "false");
-		beacon_info = &mwl_vif->beacon_info;
-		dump_data(p, size, &len, beacon_info->ie_wmm_ptr,
-			  beacon_info->ie_wmm_len, "WMM:");
-		dump_data(p, size, &len, beacon_info->ie_rsn_ptr,
-			  beacon_info->ie_rsn_len, "RSN:");
-		dump_data(p, size, &len, beacon_info->ie_rsn48_ptr,
-			  beacon_info->ie_rsn48_len, "RSN48:");
-		dump_data(p, size, &len, beacon_info->ie_mde_ptr,
-			  beacon_info->ie_mde_len, "MDE:");
-		dump_data(p, size, &len, beacon_info->ie_ht_ptr,
-			  beacon_info->ie_ht_len, "HT:");
-		dump_data(p, size, &len, beacon_info->ie_vht_ptr,
-			  beacon_info->ie_vht_len, "VHT:");
-		if (vif->type == NL80211_IFTYPE_MESH_POINT) {
-			dump_data(p, size, &len, beacon_info->ie_meshid_ptr,
-				  beacon_info->ie_meshid_len, "MESHID:");
-			dump_data(p, size, &len, beacon_info->ie_meshcfg_ptr,
-				  beacon_info->ie_meshcfg_len, "MESHCFG:");
-			dump_data(p, size, &len, beacon_info->ie_meshchsw_ptr,
-				  beacon_info->ie_meshchsw_len, "MESHCHSW:");
-		}
 	}
 	spin_unlock_bh(&priv->vif_lock);
 

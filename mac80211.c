@@ -25,6 +25,8 @@
 
 #define MAX_AMPDU_ATTEMPTS  5
 
+static void mwl_beacon_work(struct work_struct *work);
+
 static const struct ieee80211_rate mwl_rates_24[] = {
 	{ .bitrate = 10, .hw_value = 2, },
 	{ .bitrate = 20, .hw_value = 4, },
@@ -215,10 +217,10 @@ static int mwl_mac80211_add_interface(struct ieee80211_hw *hw,
 	mwl_vif->macid = macid;
 	mwl_vif->seqno = 0;
 	mwl_vif->is_hw_crypto_enabled = false;
-	mwl_vif->beacon_info.valid = false;
-	mwl_vif->set_beacon = false;
 	mwl_vif->basic_rate_idx = 0;
 	mwl_vif->broadcast_ssid = 0xFF;
+	mwl_vif->hw = hw;
+	INIT_DELAYED_WORK(&mwl_vif->beacon_work, mwl_beacon_work);
 
 	switch (vif->type) {
 	case NL80211_IFTYPE_AP:
@@ -291,6 +293,11 @@ static void mwl_mac80211_remove_interface(struct ieee80211_hw *hw,
 					  struct ieee80211_vif *vif)
 {
 	struct mwl_priv *priv = hw->priv;
+	struct mwl_vif *mwl_vif = mwl_dev_get_vif(vif);
+
+	/* Stop driver-forged beacon TX before tearing down */
+	mwl_vif->beacon_enabled = false;
+	cancel_delayed_work_sync(&mwl_vif->beacon_work);
 
 	switch (vif->type) {
 	case NL80211_IFTYPE_AP:
@@ -400,6 +407,59 @@ static void mwl_mac80211_bss_info_changed_sta(struct ieee80211_hw *hw,
 				  vif->cfg.aid);
 }
 
+/* Driver-forged beacon TX: bypass firmware beacon generation entirely.
+ * This work function fires every beacon_int and injects a fresh beacon
+ * frame (built by mac80211 with all proper IEs) into the TX path as a
+ * management frame, which the firmware transmits immediately.
+ */
+static void mwl_beacon_work(struct work_struct *work)
+{
+	struct mwl_vif *mwl_vif =
+		container_of(work, struct mwl_vif, beacon_work.work);
+	struct ieee80211_hw *hw = mwl_vif->hw;
+	struct ieee80211_vif *vif =
+		container_of((void *)mwl_vif, struct ieee80211_vif, drv_priv);
+	struct mwl_priv *priv = hw->priv;
+	struct ieee80211_tx_control control = {};
+	struct sk_buff *skb;
+	unsigned long beacon_int_jiffies;
+
+	if (!mwl_vif->beacon_enabled || !priv->radio_on)
+		return;
+
+	skb = ieee80211_beacon_get(hw, vif, 0);
+	if (!skb) {
+		wiphy_dbg(hw->wiphy,
+			"beacon_work: ieee80211_beacon_get returned NULL for macid %d\n",
+			mwl_vif->macid);
+		goto resched;
+	}
+
+	/* For mesh interfaces, periodically re-register the BSS MAC in
+	 * firmware hardware ACK filter via AP_BEACON hostcmd.  AP interfaces
+	 * get this refreshed every ~6s via BSS_CHANGED_BEACON (TIM updates),
+	 * but mesh has no periodic TIM changes.  Without this refresh, the
+	 * firmware evicts mesh MACs from its hardware ACK table once enough
+	 * AP re-registrations push them out (LRU eviction), causing unicast
+	 * frames to mesh (e.g. SAE AUTH) to never be ACK'd.
+	 */
+	if (vif->type == NL80211_IFTYPE_MESH_POINT &&
+	    time_after(jiffies,
+		       mwl_vif->last_bss_refresh + 3 * HZ)) {
+		mwl_vif->last_bss_refresh = jiffies;
+		mwl_fwcmd_set_beacon(hw, vif, skb->data, skb->len);
+	}
+
+	/* TX as management frame — firmware transmits immediately */
+	mwl_hif_tx_xmit(hw, &control, skb);
+
+resched:
+	beacon_int_jiffies = msecs_to_jiffies(vif->bss_conf.beacon_int);
+	if (!beacon_int_jiffies)
+		beacon_int_jiffies = msecs_to_jiffies(100);
+	schedule_delayed_work(&mwl_vif->beacon_work, beacon_int_jiffies);
+}
+
 static void mwl_mac80211_bss_info_changed_ap(struct ieee80211_hw *hw,
 					     struct ieee80211_vif *vif,
 					     struct ieee80211_bss_conf *info,
@@ -409,6 +469,13 @@ static void mwl_mac80211_bss_info_changed_ap(struct ieee80211_hw *hw,
 	struct mwl_vif *mwl_vif;
 
 	mwl_vif = mwl_dev_get_vif(vif);
+
+	if (vif->type == NL80211_IFTYPE_MESH_POINT &&
+	    (changed & (BSS_CHANGED_BEACON_INT | BSS_CHANGED_BEACON |
+			BSS_CHANGED_BEACON_ENABLED)))
+		wiphy_info(hw->wiphy,
+			   "bss_info_changed_ap: MESH macid=%d changed=0x%llx enable_beacon=%d\n",
+			   mwl_vif->macid, changed, info->enable_beacon);
 
 	if (changed & BSS_CHANGED_ERP_SLOT) {
 		if (priv->use_short_slot != vif->bss_conf.use_short_slot) {
@@ -476,11 +543,54 @@ static void mwl_mac80211_bss_info_changed_ap(struct ieee80211_hw *hw,
 		if (skb) {
 			mwl_fwcmd_set_beacon(hw, vif, skb->data, skb->len);
 			dev_kfree_skb_any(skb);
+		} else if (vif->type == NL80211_IFTYPE_MESH_POINT) {
+			wiphy_err(hw->wiphy,
+				  "bss_info_changed: beacon_get returned NULL for mesh macid=%d\n",
+				  mwl_vif->macid);
 		}
 	}
 
-	if (changed & BSS_CHANGED_BEACON_ENABLED)
+	if (changed & BSS_CHANGED_BEACON_ENABLED) {
 		mwl_fwcmd_bss_start(hw, vif, info->enable_beacon);
+
+		/* Start or stop driver-forged beacon TX */
+		if (info->enable_beacon) {
+			unsigned long bcn_jiffies;
+			struct sk_buff *bcn_skb;
+
+			mwl_vif->beacon_enabled = true;
+
+			/* When beaconing is (re-)enabled for mesh, send
+			 * AP_BEACON immediately to re-register the BSS MAC
+			 * in firmware's hardware ACK filter.  Without this,
+			 * mesh MACs become deregistered after the temporary
+			 * beacon disable that wpa_supplicant issues during
+			 * SAE authentication setup.
+			 */
+			if (vif->type == NL80211_IFTYPE_MESH_POINT) {
+				bcn_skb = ieee80211_beacon_get(hw, vif, 0);
+				if (bcn_skb) {
+					mwl_fwcmd_set_beacon(hw, vif,
+							     bcn_skb->data,
+							     bcn_skb->len);
+					dev_kfree_skb_any(bcn_skb);
+				}
+			}
+
+			/* Initialize refresh timer so periodic AP_BEACON
+			 * re-registration fires 3s after this point.
+			 */
+			mwl_vif->last_bss_refresh = jiffies;
+			bcn_jiffies = msecs_to_jiffies(
+				vif->bss_conf.beacon_int ?
+				vif->bss_conf.beacon_int : 100);
+			schedule_delayed_work(&mwl_vif->beacon_work,
+					     bcn_jiffies);
+		} else {
+			mwl_vif->beacon_enabled = false;
+			cancel_delayed_work_sync(&mwl_vif->beacon_work);
+		}
+	}
 }
 
 static void mwl_mac80211_bss_info_changed(struct ieee80211_hw *hw,
