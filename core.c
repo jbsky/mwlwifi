@@ -50,7 +50,6 @@ static const struct ieee80211_rate mwl_rates_24[] = {
 	{ .bitrate = 20, .hw_value = 4, },
 	{ .bitrate = 55, .hw_value = 11, },
 	{ .bitrate = 110, .hw_value = 22, },
-	{ .bitrate = 220, .hw_value = 44, },
 	{ .bitrate = 60, .hw_value = 12, },
 	{ .bitrate = 90, .hw_value = 18, },
 	{ .bitrate = 120, .hw_value = 24, },
