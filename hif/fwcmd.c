@@ -2070,56 +2070,74 @@ int mwl_fwcmd_bss_start(struct ieee80211_hw *hw,
 	return 0;
 }
 
+/* Register the BSS MAC in firmware WITHOUT forging the beacon IEs.
+ *
+ * Sends AP_BEACON (0x1101) with an empty IE body - no RSN/RSNX/WMM/rates/
+ * country - to register the BSS MAC and its per-macid TX context in the
+ * hardware ACK filter.  The real beacon is transmitted by the driver
+ * (mwl_beacon_work()) straight from the mac80211-built skb, so every IE
+ * mac80211 produces - RSN, RSNX (SAE H2E), MDE, ... - is carried verbatim.
+ *
+ * This replaces the legacy forge chain (parse_beacon -> set_ies ->
+ * set_wsc_ie -> set_ap_beacon -> spectrum/power/country), which hand-copies
+ * each element into the fixed start_cmd layout and must be extended by hand
+ * for every new IE.
+ *
+ * OPEN QUESTION (AP mode, stock firmware): with a non-zero bcn_period the
+ * firmware may still emit its own (now empty-IE) beacon, which would race
+ * the driver's software beacon.  bcn_period below keeps the value the 8864
+ * mesh build was validated with; whether AP mode on stock firmware needs
+ * bcn_period = 0 (or an explicit beacon disable) is untested.
+ */
+static int mwl_fwcmd_register_bss(struct mwl_priv *priv,
+				  struct mwl_vif *mwl_vif,
+				  struct ieee80211_bss_conf *bss_conf)
+{
+	struct hostcmd_cmd_ap_beacon *pcmd;
+	struct ds_params *phy_ds_param_set;
+
+	pcmd = (struct hostcmd_cmd_ap_beacon *)&priv->pcmd_buf[0];
+
+	mutex_lock(&priv->fwcmd_mutex);
+
+	memset(pcmd, 0x00, sizeof(*pcmd));
+	pcmd->cmd_hdr.cmd = cpu_to_le16(HOSTCMD_CMD_AP_BEACON);
+	pcmd->cmd_hdr.len = cpu_to_le16(sizeof(*pcmd));
+	pcmd->cmd_hdr.macid = mwl_vif->macid;
+
+	ether_addr_copy(pcmd->start_cmd.sta_mac_addr, mwl_vif->bssid);
+	memcpy(pcmd->start_cmd.ssid, bss_conf->ssid, bss_conf->ssid_len);
+	if (priv->chip_type == MWL8997)
+		ether_addr_copy(pcmd->start_cmd.bssid, mwl_vif->bssid);
+	pcmd->start_cmd.bss_type = 1;
+	pcmd->start_cmd.bcn_period =
+		cpu_to_le16(bss_conf->beacon_int ? bss_conf->beacon_int : 100);
+	pcmd->start_cmd.dtim_period = bss_conf->dtim_period;
+
+	phy_ds_param_set = &pcmd->start_cmd.phy_param_set.ds_param_set;
+	phy_ds_param_set->elem_id = WLAN_EID_DS_PARAMS;
+	phy_ds_param_set->len = sizeof(phy_ds_param_set->current_chnl);
+	phy_ds_param_set->current_chnl = bss_conf->chandef.chan->hw_value;
+
+	pcmd->start_cmd.cap_info = cpu_to_le16(WLAN_CAPABILITY_ESS);
+
+	if (mwl_hif_exec_cmd(priv->hw, HOSTCMD_CMD_AP_BEACON)) {
+		mutex_unlock(&priv->fwcmd_mutex);
+		return -EIO;
+	}
+
+	mutex_unlock(&priv->fwcmd_mutex);
+
+	return 0;
+}
+
 int mwl_fwcmd_set_beacon(struct ieee80211_hw *hw,
 			 struct ieee80211_vif *vif, u8 *beacon, int len)
 {
 	struct mwl_priv *priv = hw->priv;
-	struct mwl_vif *mwl_vif;
-	struct beacon_info *b_inf;
-	int rc;
+	struct mwl_vif *mwl_vif = mwl_dev_get_vif(vif);
 
-	mwl_vif = mwl_dev_get_vif(vif);
-	b_inf = &mwl_vif->beacon_info;
-
-	mwl_fwcmd_parse_beacon(priv, mwl_vif, beacon, len);
-
-	if (!b_inf->valid)
-		goto err;
-
-	if (mwl_fwcmd_set_ies(priv, mwl_vif))
-		goto err;
-
-	if (mwl_fwcmd_set_wsc_ie(hw, b_inf->ie_wsc_len, b_inf->ie_wsc_ptr))
-		goto err;
-
-	if (mwl_fwcmd_set_ap_beacon(priv, mwl_vif, &vif->bss_conf))
-		goto err;
-
-	if (b_inf->cap_info & WLAN_CAPABILITY_SPECTRUM_MGMT)
-		rc = mwl_fwcmd_set_spectrum_mgmt(priv, true);
-	else
-		rc = mwl_fwcmd_set_spectrum_mgmt(priv, false);
-	if (rc)
-		goto err;
-
-	if (b_inf->power_constraint)
-		rc = mwl_fwcmd_set_power_constraint(priv,
-						    b_inf->power_constraint);
-	if (rc)
-		goto err;
-
-	if (mwl_fwcmd_set_country_code(priv, mwl_vif, &vif->bss_conf))
-		goto err;
-
-	b_inf->valid = false;
-
-	return 0;
-
-err:
-
-	b_inf->valid = false;
-
-	return -EIO;
+	return mwl_fwcmd_register_bss(priv, mwl_vif, &vif->bss_conf);
 }
 
 int mwl_fwcmd_set_new_stn_add(struct ieee80211_hw *hw,

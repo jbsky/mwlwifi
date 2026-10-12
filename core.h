@@ -21,6 +21,7 @@
 #include <linux/interrupt.h>
 #include <linux/firmware.h>
 #include <linux/of.h>
+#include <linux/workqueue.h>
 #include <net/mac80211.h>
 
 #include "hif/hif.h"
@@ -412,6 +413,10 @@ struct mwl_vif {
 	bool set_beacon;
 	int basic_rate_idx;
 	u8 broadcast_ssid;
+	/* Software (driver-side) beacon TX - see mwl_beacon_work(). */
+	struct ieee80211_hw *hw;
+	struct delayed_work beacon_work;
+	bool beacon_enabled;
 };
 
 struct mwl_tx_info {

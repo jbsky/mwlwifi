@@ -175,6 +175,41 @@ static void mwl_mac80211_stop(struct ieee80211_hw *hw)
 	mwl_hif_tx_return_pkts(hw);
 }
 
+/* Software beacon TX.
+ *
+ * The firmware is told not to beacon autonomously (AP_BEACON with
+ * bcn_period = 0, see mwl_fwcmd_register_bss()).  We fetch the beacon that
+ * mac80211 built - RSN/RSNX/WMM/country already in place - and transmit it
+ * verbatim as a management frame, then reschedule one beacon interval
+ * later.  No per-IE translation into the firmware command layout.
+ */
+static void mwl_beacon_work(struct work_struct *work)
+{
+	struct mwl_vif *mwl_vif =
+		container_of(work, struct mwl_vif, beacon_work.work);
+	struct ieee80211_hw *hw = mwl_vif->hw;
+	struct ieee80211_vif *vif =
+		container_of((void *)mwl_vif, struct ieee80211_vif, drv_priv);
+	struct mwl_priv *priv = hw->priv;
+	struct ieee80211_tx_control control = {};
+	struct sk_buff *skb;
+	unsigned long beacon_int_jiffies;
+
+	if (!mwl_vif->beacon_enabled || !priv->radio_on)
+		return;
+
+	skb = ieee80211_beacon_get(hw, vif);
+	if (!skb)
+		goto resched;
+
+	mwl_hif_tx_xmit(hw, &control, skb);
+
+resched:
+	beacon_int_jiffies = msecs_to_jiffies(vif->bss_conf.beacon_int ?
+					      vif->bss_conf.beacon_int : 100);
+	schedule_delayed_work(&mwl_vif->beacon_work, beacon_int_jiffies);
+}
+
 static int mwl_mac80211_add_interface(struct ieee80211_hw *hw,
 				      struct ieee80211_vif *vif)
 {
@@ -220,6 +255,9 @@ static int mwl_mac80211_add_interface(struct ieee80211_hw *hw,
 	mwl_vif->set_beacon = false;
 	mwl_vif->basic_rate_idx = 0;
 	mwl_vif->broadcast_ssid = 0xFF;
+	mwl_vif->hw = hw;
+	mwl_vif->beacon_enabled = false;
+	INIT_DELAYED_WORK(&mwl_vif->beacon_work, mwl_beacon_work);
 
 	switch (vif->type) {
 	case NL80211_IFTYPE_AP:
@@ -292,6 +330,10 @@ static void mwl_mac80211_remove_interface(struct ieee80211_hw *hw,
 					  struct ieee80211_vif *vif)
 {
 	struct mwl_priv *priv = hw->priv;
+	struct mwl_vif *mwl_vif = mwl_dev_get_vif(vif);
+
+	mwl_vif->beacon_enabled = false;
+	cancel_delayed_work_sync(&mwl_vif->beacon_work);
 
 	switch (vif->type) {
 	case NL80211_IFTYPE_AP:
@@ -473,8 +515,22 @@ static void mwl_mac80211_bss_info_changed_ap(struct ieee80211_hw *hw,
 		}
 	}
 
-	if (changed & BSS_CHANGED_BEACON_ENABLED)
+	if (changed & BSS_CHANGED_BEACON_ENABLED) {
 		mwl_fwcmd_bss_start(hw, vif, info->enable_beacon);
+
+		if (info->enable_beacon) {
+			unsigned long bcn_jiffies;
+
+			mwl_vif->beacon_enabled = true;
+			bcn_jiffies = msecs_to_jiffies(info->beacon_int ?
+						       info->beacon_int : 100);
+			schedule_delayed_work(&mwl_vif->beacon_work,
+					      bcn_jiffies);
+		} else {
+			mwl_vif->beacon_enabled = false;
+			cancel_delayed_work_sync(&mwl_vif->beacon_work);
+		}
+	}
 }
 
 static void mwl_mac80211_bss_info_changed(struct ieee80211_hw *hw,
